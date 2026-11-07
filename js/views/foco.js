@@ -1,5 +1,5 @@
 import { $, esc, pl, mmss, uid, today, fmtHM, fmtDur, seg } from '../utils.js';
-import { S, UI, L, save, cmp, findTask, archiveFocus, CUP_ASSETS, cupMeta, cupImg, pickModel, addCup, cupShow, v60CarafeSVG, holdScreen, releaseLock, setAmbience, alertUser, toast, openSheet, closeSheet } from '../state.js';
+import { S, UI, L, save, cmp, findTask, archiveFocus, CUP_ASSETS, cupMeta, cupImg, pickModel, addCup, cupShow, v60CarafeSVG, holdScreen, releaseLock, setAmbience, alertUser, toast, openSheet, closeSheet, addCafeFocus } from '../state.js';
 import { render, go } from '../app.js';
 import { notifyFocusDone, notifyBreakDone, notifyAwayWarning, notifyPermission } from '../notifications.js';
 import { setupMediaHandlers, startFocusMedia, pauseFocusMedia, resumeFocusMedia, completeFocusMedia, stopFocusMedia, updateMediaSession } from '../media.js';
@@ -155,6 +155,7 @@ export function logFocus(mins,f){
   var lg0=L();lg0.focus+=mins;if(f){lg0.cats=lg0.cats||{};var ck=f.cat||'Sem categoria';lg0.cats[ck]=(lg0.cats[ck]||0)+mins}
   var t=f&&f.taskId?findTask(f.taskId):null;
   if(t)t.spent=(t.spent||0)+mins;
+  addCafeFocus(mins);
 }
 export var KIND_NOTE={total:'Rígido: sair do app ou desistir quebra a xícara.',parcial:'Flexível: pode pausar e encerrar antes, e sair do app não quebra nada.'};
 export var TIPS=['Pegue um copo d’água e deixe o celular longe.','Abra apenas o material que você vai usar.','Organize sua mesa e vamos começar.','Deixe o celular virado para baixo.','Respire fundo e comece pela primeira pequena ação.','Feche as abas que você não vai usar.','Escolha uma única coisa para terminar neste bloco.','Ajuste a luz e a cadeira. Depois, comece.'];
@@ -277,7 +278,7 @@ export function activeFocusHTML(){
       '<div class="stack"><button class="btn quiet block" data-act="skip-break">Encerrar pausa</button></div>';
   }
   if(f.mode==='failed'){
-    return '<h1>'+(f.cupId?'A xícara quebrou.':'Bloco interrompido.')+'</h1>'+cupShow(f)+'<p class="lead">'+esc(f.msg)+' Acontece. O que vale é tentar de novo agora.</p><div class="stack"><button class="btn block" data-act="skip-break">Tentar de novo</button><button class="btn quiet block" data-act="tab" data-tab="colecao">Ver coleção</button></div>';
+    return '<h1>'+(f.cupId?'A xícara quebrou.':'Bloco interrompido.')+'</h1>'+cupShow(f)+'<p class="lead">'+esc(f.msg)+' Acontece. O que vale é tentar de novo agora.</p><div class="stack"><button class="btn block" data-act="skip-break">Tentar de novo</button><button class="btn quiet block" data-act="tab" data-tab="colecao">Ver cafeteria</button></div>';
   }
   return '<h1>A pausa acabou.</h1><p class="lead">Combinado é combinado. Hora do próximo bloco.</p><div class="stack"><button class="btn block" data-act="skip-break">Novo bloco</button></div>';
 }

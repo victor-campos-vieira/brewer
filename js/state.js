@@ -4,11 +4,56 @@ import { setAmbienceMedia, stopAmbienceMedia } from './media.js';
 export var KEY='brewer.v1';
 
 /* ---------- estado ---------- */
-export var UI={agDay:null,agView:'dia',revView:'hoje',showDone:false,pick:false,open:{},colView:'set',giveUp:false,catRange:7,asking:false,tkKind:'pessoal',tkP:'pend',tkF:'new',mdCfg:false,mdBusy:false,mdErr:'',showIgn:false,listening:false,pre:null,preTimer:0,sg:[],sgDay:'',dismissed:{},hideSug:'',amb:'off',homeSub:'prio'};
+export var UI={agDay:null,agView:'dia',revView:'hoje',showDone:false,pick:false,open:{},colView:'cafe',giveUp:false,catRange:7,asking:false,tkKind:'pessoal',tkP:'pend',tkF:'new',mdCfg:false,mdBusy:false,mdErr:'',showIgn:false,listening:false,pre:null,preTimer:0,sg:[],sgDay:'',dismissed:{},hideSug:'',amb:'off',homeSub:'prio'};
 export var SH={};
 export function setSH(val){SH=val}
 
-export function fresh(){return {v:3,tasks:[],blocks:{},routines:[],rdone:{},log:{},urges:[],focus:null,wait:null,draft:{taskId:'',mins:25,kind:'total',cupModel:null},tab:'hoje',cups:[],unlocked:[],goal:240,goalStart:'',weekly1:true,testWeeks:0,keepAwake:true,interruptions:[],integrations:{googleCalendar:{status:'off'}},forceModel:null,testMode:false,sessions:[],sessMig:false,estLog:[],inbox:[],moodle:{baseUrl:'',token:'',ignored:{},confirmed:{},lastSync:0,lastResult:null},cats:['Estudo','Trabalho','Projeto pessoal','Saúde','Casa','Outro'],gateShortcut:'Liberar Instagram'}}
+export function defaultCafeState(histMins){
+  var m = Math.max(25, histMins || 0);
+  return {
+    beans: m,
+    focusMins: m,
+    roomW: 4,
+    roomD: 4,
+    floor: 'cimento',
+    wall: 'reboco',
+    ownedFloors: ['cimento'],
+    ownedWalls: ['reboco'],
+    placed: [
+      { id: 'it_1', key: 'caixote', place: 'floor', x: 1, y: 0, rot: 0, flip: false },
+      { id: 'it_2', key: 'coador',  place: 'surface', hostId: 'it_1', slot: 0, rot: 0, flip: false }
+    ],
+    inventory: [],
+    nextId: 3
+  };
+}
+
+export function sanitizeCafeState(c){
+  if(!c || typeof c !== 'object') return defaultCafeState(0);
+  if(!Array.isArray(c.placed)) c.placed = [];
+  if(!Array.isArray(c.inventory)) c.inventory = [];
+  if(!Array.isArray(c.ownedFloors)) c.ownedFloors = ['cimento'];
+  if(!Array.isArray(c.ownedWalls)) c.ownedWalls = ['reboco'];
+  if(c.roomW == null) c.roomW = 4;
+  if(c.roomD == null) c.roomD = 4;
+  c.roomW = Math.max(4, Math.round(c.roomW / 4) * 4);
+  c.roomD = Math.max(4, Math.round(c.roomD / 4) * 4);
+  if(!c.floor) c.floor = 'cimento';
+  if(!c.wall) c.wall = 'reboco';
+  if(c.beans == null) c.beans = 25;
+  if(c.focusMins == null) c.focusMins = 25;
+  if(c.nextId == null) c.nextId = (c.placed.length + c.inventory.length + 5);
+  return c;
+}
+
+export function addCafeFocus(mins){
+  if(!mins || mins <= 0) return;
+  if(!S.cafe) S.cafe = defaultCafeState(0);
+  S.cafe.beans = (S.cafe.beans || 0) + mins;
+  S.cafe.focusMins = (S.cafe.focusMins || 0) + mins;
+}
+
+export function fresh(){return {v:3,tasks:[],blocks:{},routines:[],rdone:{},log:{},urges:[],focus:null,wait:null,draft:{taskId:'',mins:25,kind:'total',cupModel:null},tab:'hoje',cups:[],unlocked:[],goal:240,goalStart:'',weekly1:true,testWeeks:0,keepAwake:true,interruptions:[],integrations:{googleCalendar:{status:'off'}},forceModel:null,testMode:false,sessions:[],sessMig:false,estLog:[],inbox:[],moodle:{baseUrl:'',token:'',ignored:{},confirmed:{},lastSync:0,lastResult:null},cats:['Estudo','Trabalho','Projeto pessoal','Saúde','Casa','Outro'],gateShortcut:'Liberar Instagram',cafe:defaultCafeState(0)}}
 
 /* tarefa: campos novos sem remover nenhum dos antigos */
 export function normTask(t){
@@ -42,6 +87,19 @@ export function load(){
   if(s.focus&&s.focus.mode!=='focus'&&s.focus.mode!=='break'){s.lastFocus=s.focus;s.focus=null}
   if(!s.sessMig){(s.cups||[]).forEach(function(c){s.sessions.push({id:'m'+c.id,d:c.d,t0:0,t1:0,mins:c.mins||0,mode:'total',ok:!!c.ok,cupId:c.id,model:c.model,cat:c.cat||'',label:c.label||'',taskId:'',src:'manual',blockId:'',ext:'',approx:true,sim:!!c.sim})});s.sessMig=true}
   var mo=s.moodle;if(!mo.ignored)mo.ignored={};if(!mo.confirmed)mo.confirmed={};
+  if(!s.cafe){
+    var histMins=0;
+    (s.sessions||[]).forEach(function(x){if(x.ok&&x.mins)histMins+=x.mins});
+    try{
+      var prevRaw=localStorage.getItem('brewer.cafe.v2.preview');
+      if(prevRaw){
+        var parsed=JSON.parse(prevRaw);
+        if(parsed&&Array.isArray(parsed.placed))s.cafe=parsed;
+      }
+    }catch(_){}
+    if(!s.cafe)s.cafe=defaultCafeState(histMins);
+  }
+  s.cafe=sanitizeCafeState(s.cafe);
   return s;
 }
 export var S=load();
@@ -261,5 +319,5 @@ export function focusHero(){return '<div class="hero">'+v60CarafeSVG(false)+'</d
 export function cupCard(){
   var ch=chunk(S.cups),last=ch[ch.length-1]||[],dots='';
   for(var i=0;i<7;i++){var b=last[i];dots+='<span class="bd'+(b?(b.ok?' ok':' bad'):'')+'"></span>'}
-  return '<div class="sec"><h2>Preparar xícara</h2><p class="lead">'+(last.length?pl(last.length,'xícara','xícaras')+' no conjunto atual.':'Cada bloco de foco completo vira uma xícara na sua coleção.')+'</p><div class="dots" role="img" aria-label="'+last.length+' de 7 no conjunto">'+dots+'</div><div class="row"><button class="btn small" data-act="tab" data-tab="foco">Começar foco</button><button class="btn quiet small" data-act="tab" data-tab="colecao">Ver coleção</button></div></div>';
+  return '<div class="sec"><h2>Preparar xícara</h2><p class="lead">'+(last.length?pl(last.length,'xícara','xícaras')+' no conjunto atual.':'Cada bloco de foco completo vira grãos para a sua cafeteria.')+'</p><div class="dots" role="img" aria-label="'+last.length+' de 7 no conjunto">'+dots+'</div><div class="row"><button class="btn small" data-act="tab" data-tab="foco">Começar foco</button><button class="btn quiet small" data-act="tab" data-tab="colecao">Ver cafeteria</button></div></div>';
 }

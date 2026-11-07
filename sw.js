@@ -1,5 +1,5 @@
 /* Brewer: cache offline. Troque o número da versão sempre que alterar arquivos publicados. */
-const CACHE = 'brewer-v34';
+const CACHE = 'brewer-v35';
 const APP_SHELL = [
   './',
   './index.html',
@@ -21,7 +21,9 @@ const APP_SHELL = [
   './js/views/vontade.js',
   './js/views/revisao.js',
   './js/views/colecao.js',
+  './js/views/cafe.js',
   './js/views/jornada.js',
+  './assets/cafe/v2/catalog.js',
   './manifest.json',
   './icons/icon-180.png',
   './icons/icon-192.png',

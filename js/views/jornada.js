@@ -1,5 +1,5 @@
 import { $, esc, pl, uid, today, addDays, fmtHM } from '../utils.js';
-import { S, L, PHASES, phaseIdx, weekIdx, currentGoal, nextGoal, qualifies, streakInfo, CUP_ASSETS, cupMeta } from '../state.js';
+import { S, L, PHASES, phaseIdx, weekIdx, currentGoal, nextGoal, qualifies, streakInfo, CUP_ASSETS, cupMeta, addCafeFocus } from '../state.js';
 
 /* ---------- JORNADA ---------- */
 export function goalPanelHTML(){
@@ -31,7 +31,7 @@ export function renderJornada(){
     '<div class="row"><button class="btn small" data-act="tab" data-tab="revisao">Registrar hoje</button></div>'+goalPanelHTML()+'<div class="timeline">'+tl+'</div>'+
     '<div class="row"><button class="btn quiet small" data-act="test-toggle" aria-pressed="'+S.testMode+'">'+(S.testMode?'Fechar modo teste':'Modo teste')+'</button></div>'+test;
 }
-export function simSession(c){S.sessions.push({id:uid(),d:c.d,t0:Date.now(),t1:Date.now(),mins:25,mode:'total',ok:c.ok,cupId:c.id,model:c.model,cat:'',label:'Teste',taskId:'',src:'manual',blockId:'',ext:'',approx:false,sim:true})}
+export function simSession(c){S.sessions.push({id:uid(),d:c.d,t0:Date.now(),t1:Date.now(),mins:25,mode:'total',ok:c.ok,cupId:c.id,model:c.model,cat:'',label:'Teste',taskId:'',src:'manual',blockId:'',ext:'',approx:false,sim:true});if(c&&c.ok)addCafeFocus(25)}
 export function simDay(k){var l=L(k);l.screen=Math.max(30,currentGoal()-30);l.goal=currentGoal();l.sim=true}
 export function testAdd(){var s=streakInfo();simDay(addDays(s.end,-s.n))}
 export function testRem(){var s=streakInfo();if(s.n>0){var l=L(addDays(s.end,-(s.n-1)));l.screen=null;l.sim=false}}

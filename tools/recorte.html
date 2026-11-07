@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Brewer — Recorte de fundo magenta (ferramenta interna)</title>
+<style>
+  body{margin:0;padding:20px;font-family:system-ui,sans-serif;background:#1E130B;color:#F7EFE6}
+  h1{font-size:18px;margin:0 0 6px}
+  p{color:#A38C7B;font-size:13px;margin:0 0 14px}
+  .bar{display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin-bottom:16px}
+  label{font-size:13px}
+  .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:14px}
+  .card{background:#281A10;border:1px solid #422919;border-radius:12px;padding:10px}
+  .card canvas{width:100%;height:auto;border-radius:8px;
+    background:repeating-conic-gradient(#3a2a1e 0 25%,#2a1d14 0 50%) 0 0/16px 16px}
+  .card a{display:inline-block;margin-top:8px;color:#FFC043;font-weight:700;font-size:13px}
+  .name{font-size:12px;color:#A38C7B;word-break:break-all}
+</style>
+</head>
+<body>
+<h1>Recorte de fundo magenta → PNG transparente</h1>
+<p>Selecione as imagens geradas (fundo #FF00FF). A ferramenta remove o magenta, limpa a borda rosada e gera um PNG para baixar e salvar em <code>assets/cafe/</code>.</p>
+<div class="bar">
+  <input type="file" id="files" accept="image/*" multiple>
+  <label>Tolerância <input type="range" id="tol" min="20" max="200" value="110"> <span id="tolV">110</span></label>
+  <label>Recortar sobras <input type="checkbox" id="trim" checked></label>
+</div>
+<div class="grid" id="out"></div>
+<script>
+var files=[];
+var $=function(s){return document.querySelector(s)};
+$('#files').onchange=function(e){files=[].slice.call(e.target.files);run()};
+$('#tol').oninput=function(){$('#tolV').textContent=this.value;run()};
+$('#trim').onchange=run;
+
+function run(){
+  $('#out').innerHTML='';
+  files.forEach(function(f){
+    var img=new Image();
+    img.onload=function(){process(img,f.name)};
+    img.src=URL.createObjectURL(f);
+  });
+}
+
+function process(img,name){
+  var tol=+$('#tol').value;
+  var c=document.createElement('canvas');c.width=img.naturalWidth;c.height=img.naturalHeight;
+  var x=c.getContext('2d');x.drawImage(img,0,0);
+  var d=x.getImageData(0,0,c.width,c.height),p=d.data;
+  for(var i=0;i<p.length;i+=4){
+    var r=p[i],g=p[i+1],b=p[i+2];
+    // distância até magenta puro
+    var dist=Math.sqrt((255-r)*(255-r)+g*g*1.6+(255-b)*(255-b));
+    if(dist<tol){p[i+3]=0}
+    else if(dist<tol*1.6){
+      // borda: transparência parcial + remove o tom rosado (despill)
+      var a=(dist-tol)/(tol*0.6);p[i+3]=Math.round(255*a);
+      var m=Math.min(r,b);if(m>g){p[i]=Math.round(g+(r-g)*0.35);p[i+2]=Math.round(g+(b-g)*0.35)}
+    }
+  }
+  x.putImageData(d,0,0);
+  if($('#trim').checked)c=trim(c);
+  var card=document.createElement('div');card.className='card';
+  card.appendChild(c);
+  var a=document.createElement('a');a.textContent='⬇ Baixar PNG';a.download=name.replace(/\.\w+$/,'')+'.png';
+  a.href=c.toDataURL('image/png');
+  var n=document.createElement('div');n.className='name';n.textContent=name+' · '+c.width+'×'+c.height;
+  card.appendChild(n);card.appendChild(a);$('#out').appendChild(card);
+}
+
+function trim(c){
+  var x=c.getContext('2d'),d=x.getImageData(0,0,c.width,c.height).data;
+  var t=c.height,l=c.width,r=0,b=0;
+  for(var y=0;y<c.height;y++)for(var k=0;k<c.width;k++){
+    if(d[(y*c.width+k)*4+3]>8){if(y<t)t=y;if(y>b)b=y;if(k<l)l=k;if(k>r)r=k}
+  }
+  if(r<l)return c;
+  var o=document.createElement('canvas');o.width=r-l+1;o.height=b-t+1;
+  o.getContext('2d').drawImage(c,l,t,o.width,o.height,0,0,o.width,o.height);
+  return o;
+}
+</script>
+</body>
+</html>

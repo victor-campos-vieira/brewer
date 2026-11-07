@@ -36,7 +36,7 @@ export function compactHeaderHTML(lg){
     '</div>'+
     '<div class="top-pills">'+
       notifPill+
-      '<button class="phase-badge sm" data-act="tab" data-tab="colecao" aria-label="Abrir prateleira de xícaras">☕ '+totalCups+'</button>'+
+      '<button class="phase-badge sm" data-act="tab" data-tab="colecao" aria-label="Abrir Cafeteria">☕ Cafeteria</button>'+
       '<button class="phase-badge sm" data-act="tab" data-tab="jornada">'+esc(p.name)+' · '+s.n+'d &rsaquo;</button>'+
     '</div>'+
   '</div>';

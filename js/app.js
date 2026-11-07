@@ -65,6 +65,7 @@ export function render(){
   if(TABS.indexOf(S.tab)<0)S.tab='hoje';
   TABS.forEach(function(t){$('#tab-'+t).hidden=(t!==S.tab)});
   document.body.classList.toggle('tab-vontade', S.tab === 'vontade');
+  document.body.classList.toggle('tab-colecao-active', S.tab === 'colecao');
   document.querySelectorAll('.bar button').forEach(function(b){b.setAttribute('aria-current',b.dataset.tab===(['colecao','jornada','foco'].indexOf(S.tab)>-1?'hoje':S.tab)?'page':'false')});
   updateTheme();
   ({hoje:renderHoje,agenda:renderAgenda,tarefas:renderTarefas,foco:renderFoco,vontade:renderVontade,revisao:renderRevisao,colecao:renderColecao,jornada:renderJornada})[S.tab]();
@@ -380,6 +381,7 @@ document.addEventListener('click',function(e){
     case 'cat-new':var cn=(prompt('Nome da nova categoria:')||'').trim();if(cn){if(S.cats.indexOf(cn)<0)S.cats.push(cn);S.draft.cat=cn;save();render()}break;
     case 'cat-range':UI.catRange=+el.dataset.v;render();break;
     case 'col-view':UI.colView=el.dataset.v;render();break;
+    case 'col-back':go('hoje');break;
     case 'cup-info':var bd=S.cups.find(function(x){return x.id===id});if(bd)toast('Xícara '+cupMeta(bd.model).name+(bd.ok?' (inteira)':' (quebrada)')+': '+(bd.label||'bloco de foco')+(bd.cat&&bd.cat!=='Sem categoria'?' ['+bd.cat+']':'')+(bd.mins?', '+bd.mins+' min':'')+', '+fmtShort(bd.d));break;
     case 'weekly-toggle':S.weekly1=!S.weekly1;if(S.weekly1)S.goalStart=mondayOf(today());save();render();break;
     case 't-week':var wv=+el.dataset.v;S.testWeeks=wv===0?0:Math.max(0,(S.testWeeks||0)+wv);save();render();break;
