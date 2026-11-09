@@ -292,29 +292,27 @@ body.tab-colecao-active #scroll {
   overflow: hidden;
 }
 body.tab-colecao-active .wrap {
-  min-height: calc(100dvh - env(safe-area-inset-top, 0px));
-  height: calc(100dvh - env(safe-area-inset-top, 0px));
+  min-height: 100dvh;
+  height: 100dvh;
   max-width: 520px;
   margin: 0 auto;
-  padding: 14px 18px calc(76px + env(safe-area-inset-bottom, 14px));
+  padding: 0;
   box-sizing: border-box;
   overflow: hidden;
-  display: flex;
-  flex-direction: column;
+  position: relative;
+  background: var(--bg);
 }
 body.tab-colecao-active #tab-colecao {
-  flex: 1;
+  position: absolute;
+  inset: 0;
   display: flex;
   flex-direction: column;
-  position: relative;
   overflow: hidden;
-  height: 100%;
-  width: 100%;
+  background: var(--bg);
 }
 .cafe-frame {
-  width: 100%;
-  height: 100%;
-  position: relative;
+  position: absolute;
+  inset: 0;
   display: flex;
   flex-direction: column;
   overflow: hidden;
@@ -322,16 +320,17 @@ body.tab-colecao-active #tab-colecao {
   border: none;
   border-radius: 0;
   box-shadow: none;
-  background: transparent;
+  background: var(--bg);
   user-select: none;
   -webkit-user-select: none;
   -webkit-tap-highlight-color: transparent;
 }
 .cafe-frame .top {
-  padding: 2px 0 10px;
+  padding: calc(10px + env(safe-area-inset-top, 0px)) 16px 8px;
   flex: none;
   z-index: 6;
-  background: transparent;
+  background: linear-gradient(180deg, var(--bg) 75%, transparent 100%);
+  pointer-events: auto;
 }
 .cafe-frame .toprow {
   display: flex;
@@ -388,10 +387,7 @@ body.tab-colecao-active #tab-colecao {
 }
 .cafe-frame .stage {
   position: absolute;
-  top: 74px;
-  left: 0;
-  right: 0;
-  bottom: 64px;
+  inset: 0;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -409,8 +405,8 @@ body.tab-colecao-active #tab-colecao {
 
 .zoom-pill {
   position: absolute;
-  right: 4px;
-  top: 80px;
+  right: 16px;
+  top: calc(76px + env(safe-area-inset-top, 0px));
   z-index: 7;
   display: inline-flex;
   align-items: center;
@@ -443,9 +439,9 @@ body.tab-colecao-active #tab-colecao {
 
 .cafe-frame .dock {
   position: absolute;
-  left: 12px;
-  right: 12px;
-  bottom: 12px;
+  left: 14px;
+  right: 14px;
+  bottom: calc(72px + env(safe-area-inset-bottom, 0px));
   z-index: 10;
   display: flex;
   flex-direction: column;
@@ -516,7 +512,7 @@ body.tab-colecao-active #tab-colecao {
   background: var(--surface);
   border-top: 1px solid var(--line);
   border-radius: 22px 22px 0 0;
-  padding: 12px 0 16px;
+  padding: 12px 0 calc(72px + env(safe-area-inset-bottom, 0px));
   box-shadow: 0 -10px 28px rgba(42,29,20,.10);
   z-index: 15;
 }

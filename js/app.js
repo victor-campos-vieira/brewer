@@ -155,30 +155,12 @@ document.addEventListener('visibilitychange',function(){
   var f=S.focus;
   if(document.hidden){markAway();return}
   if(checkGateParam()){render();return}
-  if(!f||(f.mode!=='focus'&&f.mode!=='break')){
-    var prevApp=(S.wait&&S.wait.app)||'Instagram';
-    S.tab='vontade';
-    startGate(prevApp);
-    render();
-    return;
-  }
-  if(S.tab==='vontade'&&(!S.wait||S.wait.phase==='gate')){
-    var prevApp2=(S.wait&&S.wait.app)||'Instagram';
-    startGate(prevApp2);render();return;
-  }
   if((f&&f.mode==='focus'&&!f.pausedAt)||(S.wait&&(S.wait.phase==='wait'||S.wait.phase==='gate')))holdScreen();
   render();checkReturn();updateLive();
 });
 window.addEventListener('pagehide',markAway);
 window.addEventListener('pageshow',function(e){
   if(checkGateParam()){render();return}
-  var f=S.focus;
-  if(e&&e.persisted&&(!f||(f.mode!=='focus'&&f.mode!=='break'))){
-    S.tab='vontade';
-    startGate((S.wait&&S.wait.app)||'Instagram');
-    render();
-    return;
-  }
   checkReturn();
 });
 window.addEventListener('focus',function(){if(checkGateParam())render()});
@@ -437,14 +419,7 @@ document.addEventListener('change',function(e){
 });
 
 document.addEventListener('input',function(e){var t=e.target;if(t&&t.id==='durRange'){S.draft.mins=+t.value;updateDur()}});
-if(!checkGateParam()){
-  var f0=S.focus;
-  if(!f0||(f0.mode!=='focus'&&f0.mode!=='break')){
-    S.tab='vontade';
-    startGate((S.wait&&S.wait.app)||'Instagram');
-    save();
-  }
-}
+checkGateParam();
 render();
 checkReturn();
 recordMorningActivity();

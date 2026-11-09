@@ -100,7 +100,7 @@ function getShopCategories() {
   }));
 }
 
-let roomZoom = 1.08;
+let roomZoom = 1.0;
 let camX = 0;
 let camY = 0;
 let uiMode = 'idle'; // 'idle' | 'shop' | 'decor' | 'box' | 'placing'
@@ -624,12 +624,12 @@ function getBaseBounds() {
   const T = db.T || 31;
   const K = db.K || 0.573;
   const H = getWallH();
-  const xMin = -D * T - 14;
-  const xMax = W * T + 14;
+  const xMin = -D * T - 38;
+  const xMax = W * T + 38;
   const baseCenterX = (xMin + xMax) / 2;
   const baseHalfW = (xMax - xMin) / 2;
-  const baseTop = -(H + 10);
-  const baseBottom = Math.round((W + D) * T * K + 24);
+  const baseTop = -(H + 32);
+  const baseBottom = Math.round((W + D) * T * K + 40);
   const baseH = baseBottom - baseTop;
   const baseCenterY = (baseTop + baseBottom) / 2;
   return { W, D, H, baseCenterX, baseHalfW, baseH, baseCenterY };
@@ -659,61 +659,69 @@ function renderRoom() {
 
   updateViewBoxOnly();
 
-  let s = `
-  <defs>
-    <pattern id="fp_main" width="4" height="4" patternUnits="userSpaceOnUse">
-      <image href="${assetUrl(fl.src)}" x="0" y="0" width="4" height="4" preserveAspectRatio="none"/>
-    </pattern>
-    <pattern id="wp_main" width="4" height="${H}" patternUnits="userSpaceOnUse">
-      <image href="${assetUrl(wl.src)}" x="0" y="0" width="4" height="${H}" preserveAspectRatio="none"/>
-    </pattern>
-    <clipPath id="clipFloor_main"><rect x="0" y="0" width="${W}" height="${D}"/></clipPath>
-    <clipPath id="clipWallL_main"><rect x="0" y="0" width="${D}" height="${H}"/></clipPath>
-    <clipPath id="clipWallR_main"><rect x="0" y="0" width="${W}" height="${H}"/></clipPath>
-  </defs>`;
+  const baseKey = `${cafe.floor}_${cafe.wall}_${W}_${D}`;
+  let staticGroup = svg.querySelector('#roomStatic');
 
-  const c = P(W / 2, D / 2);
-  const spanAvg = (W + D) / 2;
-  s += `<ellipse cx="${c[0]}" cy="${c[1] + 24}" rx="${spanAvg * 33}" ry="${spanAvg * 14}" fill="rgba(42,29,20,.10)"/>`;
+  if (!staticGroup || staticGroup.getAttribute('data-base-key') !== baseKey) {
+    let s = `
+    <defs>
+      <pattern id="fp_main" width="4" height="4" patternUnits="userSpaceOnUse">
+        <image href="${assetUrl(fl.src)}" x="0" y="0" width="4" height="4" preserveAspectRatio="none"/>
+      </pattern>
+      <pattern id="wp_main" width="4" height="${H}" patternUnits="userSpaceOnUse">
+        <image href="${assetUrl(wl.src)}" x="0" y="0" width="4" height="${H}" preserveAspectRatio="none"/>
+      </pattern>
+      <clipPath id="clipFloor_main"><rect x="0" y="0" width="${W}" height="${D}"/></clipPath>
+      <clipPath id="clipWallL_main"><rect x="0" y="0" width="${D}" height="${H}"/></clipPath>
+      <clipPath id="clipWallR_main"><rect x="0" y="0" width="${W}" height="${H}"/></clipPath>
+    </defs>`;
 
-  const WT = 0.16;
-  s += poly([[0, 0, H], [0, D, H], [-WT, D, H], [-WT, -WT, H], [W, -WT, H], [W, 0, H]], wl.top || '#D8CCB8', 1.6);
-  s += poly([[-WT, D, 0], [0, D, 0], [0, D, H], [-WT, D, H]], wl.sideL || '#9B8E7B', 1.6);
-  s += poly([[W, -WT, 0], [W, 0, 0], [W, 0, H], [W, -WT, H]], wl.sideR || '#B2A490', 1.6);
+    const c = P(W / 2, D / 2);
+    const spanAvg = (W + D) / 2;
+    s += `<ellipse cx="${c[0]}" cy="${c[1] + 24}" rx="${spanAvg * 33}" ry="${spanAvg * 14}" fill="rgba(42,29,20,.10)"/>`;
 
-  s += `<g transform="matrix(${T}, ${(-T * K).toFixed(3)}, 0, 1, ${-D * T}, ${(D * T * K - H).toFixed(2)})" clip-path="url(#clipWallL_main)">
-    <rect x="0" y="0" width="${D}" height="${H}" fill="url(#wp_main)" filter="brightness(0.92)"/>
-  </g>`;
-  s += poly([[0, 0, 0], [0, D, 0], [0, D, H], [0, 0, H]], 'none', 1.8);
+    const WT = 0.16;
+    s += poly([[0, 0, H], [0, D, H], [-WT, D, H], [-WT, -WT, H], [W, -WT, H], [W, 0, H]], wl.top || '#D8CCB8', 1.6);
+    s += poly([[-WT, D, 0], [0, D, 0], [0, D, H], [-WT, D, H]], wl.sideL || '#9B8E7B', 1.6);
+    s += poly([[W, -WT, 0], [W, 0, 0], [W, 0, H], [W, -WT, H]], wl.sideR || '#B2A490', 1.6);
 
-  s += `<g transform="matrix(${T}, ${(T * K).toFixed(3)}, 0, 1, 0, ${-H})" clip-path="url(#clipWallR_main)">
-    <rect x="0" y="0" width="${W}" height="${H}" fill="url(#wp_main)"/>
-  </g>`;
-  s += poly([[0, 0, 0], [W, 0, 0], [W, 0, H], [0, 0, H]], 'none', 1.8);
+    s += `<g transform="matrix(${T}, ${(-T * K).toFixed(3)}, 0, 1, ${-D * T}, ${(D * T * K - H).toFixed(2)})" clip-path="url(#clipWallL_main)">
+      <rect x="0" y="0" width="${D}" height="${H}" fill="url(#wp_main)" filter="brightness(0.92)"/>
+    </g>`;
+    s += poly([[0, 0, 0], [0, D, 0], [0, D, H], [0, 0, H]], 'none', 1.8);
 
-  s += `<g transform="matrix(${T}, ${(T * K).toFixed(3)}, ${-T}, ${(T * K).toFixed(3)}, 0, 0)" clip-path="url(#clipFloor_main)">
-    <rect x="0" y="0" width="${W}" height="${D}" fill="url(#fp_main)"/>
-  </g>`;
+    s += `<g transform="matrix(${T}, ${(T * K).toFixed(3)}, 0, 1, 0, ${-H})" clip-path="url(#clipWallR_main)">
+      <rect x="0" y="0" width="${W}" height="${H}" fill="url(#wp_main)"/>
+    </g>`;
+    s += poly([[0, 0, 0], [W, 0, 0], [W, 0, H], [0, 0, H]], 'none', 1.8);
 
-  if (W > 4) {
-    const [mx0, my0] = P(4, 0, 0);
-    const [mx1, my1] = P(4, D, 0);
-    s += `<line x1="${mx0.toFixed(1)}" y1="${my0.toFixed(1)}" x2="${mx1.toFixed(1)}" y2="${my1.toFixed(1)}" stroke="rgba(42,29,20,0.28)" stroke-width="1.3" pointer-events="none"/>`;
+    s += `<g transform="matrix(${T}, ${(T * K).toFixed(3)}, ${-T}, ${(T * K).toFixed(3)}, 0, 0)" clip-path="url(#clipFloor_main)">
+      <rect x="0" y="0" width="${W}" height="${D}" fill="url(#fp_main)"/>
+    </g>`;
+
+    if (W > 4) {
+      const [mx0, my0] = P(4, 0, 0);
+      const [mx1, my1] = P(4, D, 0);
+      s += `<line x1="${mx0.toFixed(1)}" y1="${my0.toFixed(1)}" x2="${mx1.toFixed(1)}" y2="${my1.toFixed(1)}" stroke="rgba(42,29,20,0.28)" stroke-width="1.3" pointer-events="none"/>`;
+    }
+    if (D > 4) {
+      const [my0x, my0y] = P(0, 4, 0);
+      const [my1x, my1y] = P(W, 4, 0);
+      s += `<line x1="${my0x.toFixed(1)}" y1="${my0y.toFixed(1)}" x2="${my1x.toFixed(1)}" y2="${my1x.toFixed(1)}" stroke="rgba(42,29,20,0.28)" stroke-width="1.3" pointer-events="none"/>`;
+    }
+
+    s += poly([[0, 0], [W, 0], [W, D], [0, D]], 'none', 1.8);
+    s += poly([[-WT, D, 0], [0, D, 0], [W, D, 0], [W, D, -10], [-WT, D, -10]], fl.edgeL || '#7B736A', 1.6);
+    s += poly([[W, 0, 0], [W, -WT, 0], [W, -WT, -10], [W, D, -10], [W, D, 0]], fl.edgeR || '#91887E', 1.6);
+
+    svg.innerHTML = `<g id="roomStatic" data-base-key="${baseKey}">${s}</g><g id="roomOverlay"></g><g id="roomItems"></g>`;
   }
-  if (D > 4) {
-    const [my0x, my0y] = P(0, 4, 0);
-    const [my1x, my1y] = P(W, 4, 0);
-    s += `<line x1="${my0x.toFixed(1)}" y1="${my0y.toFixed(1)}" x2="${my1x.toFixed(1)}" y2="${my1y.toFixed(1)}" stroke="rgba(42,29,20,0.28)" stroke-width="1.3" pointer-events="none"/>`;
-  }
 
-  s += poly([[0, 0], [W, 0], [W, D], [0, D]], 'none', 1.8);
-  s += poly([[-WT, D, 0], [0, D, 0], [W, D, 0], [W, D, -10], [-WT, D, -10]], fl.edgeL || '#7B736A', 1.6);
-  s += poly([[W, 0, 0], [W, -WT, 0], [W, -WT, -10], [W, D, -10], [W, D, 0]], fl.edgeR || '#91887E', 1.6);
+  const overlayGroup = svg.querySelector('#roomOverlay');
+  if (overlayGroup) overlayGroup.innerHTML = renderPlacementOverlay();
 
-  s += renderPlacementOverlay();
-  s += renderSortedScene();
-
-  svg.innerHTML = s;
+  const itemsGroup = svg.querySelector('#roomItems');
+  if (itemsGroup) itemsGroup.innerHTML = renderSortedScene();
 }
 
 const ROT_LABELS = ['0°', '90°', '180°', '270°'];
@@ -736,7 +744,7 @@ function renderHUD() {
   if (xpText) xpText.textContent = info.xpLabel;
 
   const zoomLabel = document.getElementById('zoomLabel');
-  if (zoomLabel) zoomLabel.textContent = `${Math.round((roomZoom / 1.08) * 100)}%`;
+  if (zoomLabel) zoomLabel.textContent = `${Math.round(roomZoom * 100)}%`;
 
   const boxBadge = document.getElementById('boxBadge');
   if (boxBadge) {
@@ -1385,7 +1393,7 @@ function zoomAtClientPoint(nextZoom, clientX, clientY) {
   clampCamera();
   updateViewBoxOnly();
   const zoomLabel = document.getElementById('zoomLabel');
-  if (zoomLabel) zoomLabel.textContent = `${Math.round((roomZoom / 1.08) * 100)}%`;
+  if (zoomLabel) zoomLabel.textContent = `${Math.round(roomZoom * 100)}%`;
 }
 
 function enableDesktopDragScroll(el) {
@@ -1570,7 +1578,7 @@ function attachCafeEvents() {
   const zoomLabel = document.getElementById('zoomLabel');
   if (zoomLabel) {
     zoomLabel.addEventListener('click', () => {
-      roomZoom = 1.08;
+      roomZoom = 1.0;
       camX = 0;
       camY = 0;
       renderRoom();
