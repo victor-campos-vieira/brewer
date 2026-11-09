@@ -333,7 +333,7 @@ async function sendPushToSub(sub, payload) {
     return false;
   }
 }
-async function sendPushToAll(env, payload) {
+async function sendPushToAll(env, payload, excludeEndpoints = null) {
   if (!env.SUBSCRIPTIONS) {
     console.warn("KV SUBSCRIPTIONS n\xE3o configurado");
     return { success: false, error: "KV SUBSCRIPTIONS n\xE3o configurado" };
@@ -346,6 +346,10 @@ async function sendPushToAll(env, payload) {
     if (!raw) continue;
     try {
       const sub = JSON.parse(raw);
+      const endpointHash = key.name.replace("sub:", "");
+      if (excludeEndpoints && (excludeEndpoints.has(sub.endpoint) || excludeEndpoints.has(endpointHash))) {
+        continue;
+      }
       const ok = await sendPushToSub(sub, payload);
       if (ok) {
         successCount++;
@@ -467,6 +471,7 @@ var worker_source_default = {
       const utcHours = nowDate.getUTCHours();
       const utcMins = nowDate.getUTCMinutes();
       const utcDay = nowDate.getUTCDay();
+      const notifiedEndpoints = new Set();
       const schedList = await env.SUBSCRIPTIONS.list({ prefix: "sched:" });
       for (const item of schedList.keys) {
         const rawSched = await env.SUBSCRIPTIONS.get(item.name);
@@ -499,6 +504,8 @@ var worker_source_default = {
                 body: tr.body,
                 tag: tr.tag || "brewer-smart"
               });
+              notifiedEndpoints.add(sub.endpoint);
+              notifiedEndpoints.add(endpointHash);
             }
           } else {
             remainingTriggers.push(tr);
@@ -512,23 +519,32 @@ var worker_source_default = {
           }
         }
       }
+      const dateKey = nowDate.toISOString().slice(0, 10);
       const isSundayNight = utcDay === 0 && utcHours === 23 && utcMins >= 25 && utcMins <= 40;
       if (isSundayNight) {
-        console.log("Executando fechamento de Domingo \xE0 noite...");
-        await sendPushToAll(env, {
-          title: "\u{1F319} Domingo \xE0 noite \xB7 Brewer",
-          body: "Uma semana se encerra. Amanh\xE3 \xE9 segunda-feira: uma p\xE1gina limpa para recome\xE7ar no seu ritmo.",
-          tag: "brewer-sunday-fallback"
-        });
+        const alreadySentSunday = await env.SUBSCRIPTIONS.get('fallback_sent:sunday:' + dateKey);
+        if (!alreadySentSunday) {
+          console.log("Executando fechamento de Domingo \xE0 noite (fallback)...");
+          await sendPushToAll(env, {
+            title: "\u{1F319} Domingo \xE0 noite \xB7 Brewer",
+            body: "Uma semana se encerra. Amanh\xE3 \xE9 segunda-feira: uma p\xE1gina limpa para recome\xE7ar no seu ritmo.",
+            tag: "brewer-sunday"
+          }, notifiedEndpoints);
+          await env.SUBSCRIPTIONS.put('fallback_sent:sunday:' + dateKey, '1', { expirationTtl: 86400 });
+        }
       }
       const isMorningHour = utcHours === 10 && utcMins >= 25 && utcMins <= 40;
       if (isMorningHour) {
-        console.log("Executando convite matinal das 07:30 BRT...");
-        await sendPushToAll(env, {
-          title: "\u2615 Bom dia \xB7 Brewer",
-          body: "Um momento tranquilo para tomar um caf\xE9 e definir o foco de hoje.",
-          tag: "brewer-morning-fallback"
-        });
+        const alreadySentMorning = await env.SUBSCRIPTIONS.get('fallback_sent:morning:' + dateKey);
+        if (!alreadySentMorning) {
+          console.log("Executando convite matinal das 07:30 BRT (fallback)...");
+          await sendPushToAll(env, {
+            title: "\u2615 Bom dia \xB7 Brewer",
+            body: "Um momento tranquilo para tomar um caf\xE9 e definir o foco de hoje.",
+            tag: "brewer-morning"
+          }, notifiedEndpoints);
+          await env.SUBSCRIPTIONS.put('fallback_sent:morning:' + dateKey, '1', { expirationTtl: 86400 });
+        }
       }
     })());
   }

@@ -136,7 +136,7 @@ export function renderVontade(){
     if(f&&f.mode==='focus'){
       focusWarn=f.kind==='parcial'
         ?'<div class="nudge" style="width:100%"><h3>Foco parcial em andamento</h3><p class="small" style="margin-top:4px">Você está em <b>'+esc(f.label)+'</b>. Quer mesmo interromper agora?</p></div>'
-        :'<div class="nudge gate-warn" style="width:100%"><h3>Atenção: xícara em risco!</h3><p class="small" style="margin-top:4px">Você está no foco <b>'+esc(f.label)+'</b>. Ir para o '+esc(s.app||'Instagram')+' agora vai quebrar sua xícara.</p></div>';
+        :'<div class="nudge gate-warn" style="width:100%"><h3>Atenção: foco em andamento!</h3><p class="small" style="margin-top:4px">Você está no foco <b>'+esc(f.label)+'</b>. Ir para o '+esc(s.app||'Instagram')+' agora vai interromper seu bloco.</p></div>';
     }
     /* FASE 1: Enquanto o tempo corre, tela 100% clean (só respiração e contador) */
     if(rem>0){

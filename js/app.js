@@ -66,6 +66,7 @@ export function render(){
   TABS.forEach(function(t){$('#tab-'+t).hidden=(t!==S.tab)});
   document.body.classList.toggle('tab-vontade', S.tab === 'vontade');
   document.body.classList.toggle('tab-colecao-active', S.tab === 'colecao');
+  document.body.classList.toggle('focus-running', S.tab === 'foco' && !!(S.focus && (S.focus.mode === 'focus' || S.focus.mode === 'break')));
   document.querySelectorAll('.bar button').forEach(function(b){b.setAttribute('aria-current',b.dataset.tab===(['colecao','jornada','foco'].indexOf(S.tab)>-1?'hoje':S.tab)?'page':'false')});
   updateTheme();
   ({hoje:renderHoje,agenda:renderAgenda,tarefas:renderTarefas,foco:renderFoco,vontade:renderVontade,revisao:renderRevisao,colecao:renderColecao,jornada:renderJornada})[S.tab]();
@@ -97,6 +98,7 @@ export function updateLive(){
   var now=Date.now(),f=S.focus,s=S.wait,title='Brewer';
   var navLocked=!!((S.tab==='vontade'&&s&&s.phase==='gate'&&now<s.end)||(S.tab==='foco'&&(UI.pre||(f&&f.mode==='focus'))));
   document.body.classList[navLocked?'add':'remove']('gate-lock');
+  document.body.classList.toggle('focus-running', S.tab === 'foco' && !!(f && (f.mode === 'focus' || f.mode === 'break')));
   if(f&&(f.mode==='focus'||f.mode==='break')){
     var rem=f.pausedAt?f.endTime-f.pausedAt:f.endTime-now;
     var ft=$('#focusTime');if(ft)ft.textContent=mmss(rem);

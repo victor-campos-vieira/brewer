@@ -29,7 +29,7 @@ export function breakFocus(reason,away){
   f.msg=reason==='phone'?'Você usou o celular durante o bloco ('+fmtAway(away)+' fora). A interrupção foi registrada.':reason==='pause'?'A pausa de emergência passou de 10 minutos.':'Você desistiu do bloco.';
   if(reason==='phone')S.interruptions.push({t:Date.now(),type:'phone',mins:Math.max(1,Math.round(away/60000)),cat:f.cat||'',label:f.label});
   releaseLock();stopFocusMedia(false);save();render();
-  if(S.tab!=='foco'&&S.tab!=='hoje')toast('O foco foi interrompido e a xícara quebrou.');
+  if(S.tab!=='foco'&&S.tab!=='hoje')toast('O foco foi interrompido.');
 }
 export function completeFocus(){
   var f=S.focus;if(!f||f.mode!=='focus')return;
@@ -157,7 +157,7 @@ export function logFocus(mins,f){
   if(t)t.spent=(t.spent||0)+mins;
   addCafeFocus(mins);
 }
-export var KIND_NOTE={total:'Rígido: sair do app ou desistir quebra a xícara.',parcial:'Flexível: pode pausar e encerrar antes, e sair do app não quebra nada.'};
+export var KIND_NOTE={total:'Rígido: sair do app ou desistir interrompe o bloco e não pontua grãos.',parcial:'Flexível: pode pausar e encerrar antes, pontuando pelo tempo cumprido.'};
 export var TIPS=['Pegue um copo d’água e deixe o celular longe.','Abra apenas o material que você vai usar.','Organize sua mesa e vamos começar.','Deixe o celular virado para baixo.','Respire fundo e comece pela primeira pequena ação.','Feche as abas que você não vai usar.','Escolha uma única coisa para terminar neste bloco.','Ajuste a luz e a cadeira. Depois, comece.'];
 export function pickTip(cfg){
   var pool=TIPS.slice(),h=new Date().getHours();
@@ -248,7 +248,7 @@ export function activeFocusHTML(){
   var f=S.focus;
   if(f.mode==='focus'){
     var paused=!!f.pausedAt,rem=paused?f.endTime-f.pausedAt:f.endTime-Date.now();
-    var gu=UI.giveUp?'<button class="btn quiet block danger" data-act="stop-focus">Tenho certeza: quebrar a xícara</button>':'<button class="btn quiet block" data-act="give-up">Desistir</button>';
+    var gu=UI.giveUp?'<button class="btn quiet block danger" data-act="stop-focus">Tenho certeza: interromper foco</button>':'<button class="btn quiet block" data-act="give-up">Desistir</button>';
     var btns=f.kind==='parcial'?(paused?'<div class="stack"><button class="btn block" data-act="resume">Retomar</button><button class="btn quiet block" data-act="end-partial">Encerrar foco</button></div>':'<div class="stack"><button class="btn sun block" data-act="to-urge">A vontade bateu</button><button class="btn quiet block" data-act="pause">Pausar</button><button class="btn quiet block" data-act="end-partial">Encerrar foco</button></div>'):(paused?'<div class="stack"><button class="btn block" data-act="resume">Retomar o foco</button>'+gu+'</div>':'<div class="stack"><button class="btn sun block" data-act="to-urge">A vontade bateu</button><button class="btn quiet block" data-act="pause">Pausa de emergência</button>'+gu+'</div>');
     var sim=(S.testMode&&!paused&&f.kind!=='parcial')?'<div class="row"><button class="btn quiet small" data-act="sim-away" data-v="10">Simular 10 s fora</button><button class="btn quiet small" data-act="sim-away" data-v="30">Simular 30 s fora</button><button class="btn quiet small" data-act="sim-away" data-v="120">Simular 2 min fora</button></div>':'';
     return '<div class="focus-immersive">'+
@@ -259,7 +259,7 @@ export function activeFocusHTML(){
       '<div class="bar-track" style="max-width:280px;margin:14px auto 0"><div class="bar-fill" id="focusBar"></div></div>'+
       (paused?'':ambienceHTML())+
       (paused?'':(notifyPermission()==='default'?'<div style="margin-top:12px"><button class="btn quiet small" style="min-height:30px;font-size:12px;padding:0 12px" data-act="notify-enable">🔔 Ativar alertas de término</button></div>':'<p class="muted small" style="font-size:11px;margin-top:10px">🔔 Alerta ativado ao terminar</p>'))+
-      (paused?'':'<p class="muted small" style="margin-top:14px">'+(f.kind==='parcial'?'Modo flexível: sair não quebra a xícara.':'Pode bloquear a tela. Sair para outro app interrompe o foco.')+'</p>')+
+      (paused?'':'<p class="muted small" style="margin-top:14px">'+(f.kind==='parcial'?'Modo flexível: você pode pausar e encerrar quando quiser.':'Pode bloquear a tela. Sair para outro app interrompe o foco.')+'</p>')+
       (paused?'':'<p class="muted small" style="font-size:11px;margin-top:6px;opacity:.8">📱 Contador e controles ativos na tela bloqueada</p>')+
       '<div style="margin-top:22px">'+btns+sim+'</div>'+
     '</div>';
@@ -269,7 +269,8 @@ export function activeFocusHTML(){
     var body=f.starter
       ?'<p class="lead">Você começou, que era a parte difícil. Quer continuar?</p><div class="stack"><button class="btn block" data-act="more-block">Continuar por mais 25 min</button>'+(task&&!task.done?'<button class="btn quiet block" data-act="done-task">Terminei a tarefa</button>':'')+'<button class="btn quiet block" data-act="skip-break">Parar por aqui</button></div>'
       :'<p class="lead">Você ficou '+Math.max(1,Math.round(f.total/60))+' minutos em '+esc(f.cat&&f.cat!=='Sem categoria'?f.cat:'uma coisa só')+'. Agora a pausa é sua, com hora para acabar.</p><div class="stack"><button class="btn sun block" data-act="start-break">Pausa de 5 min, celular liberado</button>'+(task&&!task.done?'<button class="btn quiet block" data-act="done-task">Marcar &ldquo;'+esc(task.text)+'&rdquo; como feita</button>':'')+'<button class="btn quiet block" data-act="skip-break">Pular pausa</button></div>';
-    return '<h1>'+(f.kind==='parcial'?'Foco parcial registrado.':'Bloco feito.')+'</h1>'+cupShow(f)+(f.kind==='parcial'?partialDone(f,task):body);
+    var beansBadge='<div class="nudge" style="margin:16px 0;text-align:center;font-size:15px">☕ <b>+'+Math.max(1,Math.round(f.total/60))+' grãos de café</b> adicionados à sua Cafeteria!</div>';
+    return '<h1>'+(f.kind==='parcial'?'Foco parcial registrado.':'Bloco concluído!')+'</h1>'+beansBadge+(f.kind==='parcial'?partialDone(f,task):body);
   }
   if(f.mode==='break'){
     return '<h2>Pausa</h2><div class="bigtime" id="focusTime">'+mmss(f.endTime-Date.now())+'</div>'+
@@ -278,7 +279,7 @@ export function activeFocusHTML(){
       '<div class="stack"><button class="btn quiet block" data-act="skip-break">Encerrar pausa</button></div>';
   }
   if(f.mode==='failed'){
-    return '<h1>'+(f.cupId?'A xícara quebrou.':'Bloco interrompido.')+'</h1>'+cupShow(f)+'<p class="lead">'+esc(f.msg)+' Acontece. O que vale é tentar de novo agora.</p><div class="stack"><button class="btn block" data-act="skip-break">Tentar de novo</button><button class="btn quiet block" data-act="tab" data-tab="colecao">Ver cafeteria</button></div>';
+    return '<h1>Bloco interrompido</h1><p class="lead">'+esc(f.msg)+' Acontece! Nenhum grão foi perdido, mas você não colheu grãos dessa vez. O importante é descansar um pouco e tentar de novo no seu ritmo.</p><div class="stack"><button class="btn block" data-act="skip-break">Tentar de novo</button><button class="btn quiet block" data-act="tab" data-tab="colecao">Ver cafeteria</button></div>';
   }
   return '<h1>A pausa acabou.</h1><p class="lead">Combinado é combinado. Hora do próximo bloco.</p><div class="stack"><button class="btn block" data-act="skip-break">Novo bloco</button></div>';
 }

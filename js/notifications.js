@@ -216,7 +216,7 @@ export function notifyBreakDone() {
 
 export function notifyAwayWarning() {
   showNotification('⚠️ Foco em andamento no Brewer', {
-    body: 'Volte para o aplicativo para não interromper seu foco e quebrar a xícara!',
+    body: 'Volte para o aplicativo para manter seu foco e colher seus grãos!',
     tag: 'brewer-away-warning',
     renotify: true
   });

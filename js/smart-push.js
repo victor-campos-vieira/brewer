@@ -130,7 +130,7 @@ export function generateSmartTriggers() {
   var sunBody = '';
   if (weekCups >= 5) {
     sunTitle = '🌙 Semana com ritmo · Brewer';
-    sunBody = 'Você completou ' + weekCups + ' xícaras de foco esta semana! Aproveite o descanso deste domingo com a mente tranquila.';
+    sunBody = 'Você completou ' + weekCups + ' blocos de foco esta semana! Aproveite o descanso deste domingo com a mente tranquila.';
   } else {
     sunTitle = '🌙 Recomeço gentil · Brewer';
     sunBody = 'Semanas mais puxadas acontecem com todo mundo. Amanhã é segunda-feira: uma página em branco para recomeçar no seu ritmo.';

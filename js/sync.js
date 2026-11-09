@@ -4,7 +4,7 @@ import { render } from './app.js';
 
 /* ---------- Google Agenda (OAuth via Google Identity Services + Calendar API v3) ---------- */
 export var Integrations={googleCalendar:{
-  origin:'https://vitinho12.github.io',
+  origin:(typeof window!=='undefined'&&window.location&&window.location.origin)?window.location.origin:'https://vitinho12.github.io',
   clientId:'559268929436-vvaltsjeietmvhh2uor7m51asmn4u8a9.apps.googleusercontent.com',
   scopes:[
     'https://www.googleapis.com/auth/calendar.events',
