@@ -268,7 +268,15 @@ document.addEventListener('click',function(e){
     case 'start-focus':
       var cl2=$('#customLabel'),tid=effTaskId(),tk=tid?findTask(tid):null;
       openRitual({mins:S.draft.mins,kind:S.draft.kind,taskId:tid,label:tk?tk.text:((cl2&&cl2.value.trim())||'Foco livre'),cat:effCat()||'Sem categoria',src:'manual'});break;
-    case 'pomo-sheet':openSheet('☕ Modo Pomodoro',pomodoroSheetHTML());break;
+    case 'pomo-sheet':openSheet('Modo Pomodoro',pomodoroSheetHTML());break;
+    case 'pomo-kind':
+      var pk=el.dataset.v;
+      var dpk=S.draft.pomo=S.draft.pomo||{focusMins:25,breakMins:5,longBreakMins:15,cycles:4};
+      dpk.kind=pk==='parcial'?'parcial':'total';
+      document.querySelectorAll('[data-act="pomo-kind"]').forEach(function(b){
+        b.setAttribute('aria-pressed',b.dataset.v===dpk.kind);
+      });
+      updatePomoSummary();save();break;
     case 'pomo-preset':
       var pr=el.dataset.v,dp=S.draft.pomo=S.draft.pomo||{cycles:4};
       dp.preset=pr;
