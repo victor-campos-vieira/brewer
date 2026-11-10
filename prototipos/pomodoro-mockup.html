@@ -98,11 +98,11 @@
   /* Base do Card B (degradê café com leite suave + borda 22px) */
   .pomo-btn-b {
     width: 100%;
-    min-height: 58px;
+    min-height: 66px;
     border-radius: 22px;
     background: linear-gradient(140deg, var(--surface) 10%, #E8DCC9 100%);
     border: 1.5px solid var(--line);
-    padding: 8px 14px 8px 12px;
+    padding: 12px 16px;
     display: flex;
     align-items: center;
     justify-content: space-between;
@@ -118,25 +118,29 @@
   .pomo-b-left {
     display: flex;
     align-items: center;
-    gap: 11px;
+    gap: 13px;
   }
   .pomo-b-titles b {
     display: block;
     font-family: "Bricolage Grotesque", Figtree, sans-serif;
-    font-size: 14.5px;
+    font-size: 16.5px;
     font-weight: 700;
     color: var(--ink);
-    line-height: 1.2;
+    line-height: 1.25;
+    letter-spacing: -0.01em;
   }
   .pomo-b-titles span {
-    font-size: 11.5px;
+    display: block;
+    font-size: 13px;
     color: var(--muted);
+    line-height: 1.25;
+    margin-top: 2px;
   }
 
   /* --- Ícone B1: Cantos Suaves (12px) Marrom + Relógio Branco --- */
   .pomo-ic-b1 {
-    width: 36px;
-    height: 36px;
+    width: 44px;
+    height: 44px;
     border-radius: 12px;
     background: var(--sea);
     display: grid;
@@ -148,22 +152,22 @@
 
   /* --- Ícone B2: Círculo (50%) Marrom + Relógio Branco --- */
   .pomo-ic-b2 {
-    width: 36px;
-    height: 36px;
+    width: 44px;
+    height: 44px;
     border-radius: 50%;
     background: var(--sea);
     display: grid;
     place-items: center;
     color: #FFFBF4;
-    box-shadow: 0 2px 6px rgba(123, 79, 46, 0.25);
+    box-shadow: 0 2px 8px rgba(123, 79, 46, 0.25);
     flex: none;
   }
 
   /* --- Ícone B3: Marrom Profundo com Seta Simples na Direita --- */
   .pomo-ic-b3 {
-    width: 38px;
-    height: 38px;
-    border-radius: 13px;
+    width: 44px;
+    height: 44px;
+    border-radius: 14px;
     background: #633E23;
     display: grid;
     place-items: center;
@@ -175,10 +179,16 @@
   .pomo-badge-fill {
     background: var(--sea);
     color: var(--on-sea);
-    font-size: 11px;
+    font-size: 13.5px;
     font-weight: 700;
-    padding: 5px 11px;
+    min-height: 38px;
+    padding: 0 16px;
     border-radius: 999px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 3px;
+    box-shadow: 0 2px 8px rgba(123, 79, 46, 0.22);
   }
   .pomo-arrow-simple {
     color: var(--sea);

@@ -680,84 +680,110 @@ body.tab-colecao-active #tab-colecao {
 /* ---------- Pomodoro Café (Opção B2) ---------- */
 .pomo-btn-b2 {
   width: 100%;
-  min-height: 58px;
+  min-height: 66px;
   border-radius: 22px;
   background: linear-gradient(140deg, var(--surface) 10%, #E8DCC9 100%);
   border: 1.5px solid var(--line);
-  padding: 8px 14px 8px 12px;
+  padding: 12px 16px;
   display: flex;
   align-items: center;
   justify-content: space-between;
+  gap: 12px;
   box-shadow: 0 4px 16px rgba(42, 29, 20, 0.06);
-  margin-bottom: 16px;
+  margin-top: 12px;
+  margin-bottom: 12px;
   cursor: pointer;
   box-sizing: border-box;
   transition: transform .12s ease, box-shadow .12s ease;
 }
+.pomo-btn-b2 + .forest-card {
+  margin-top: 0;
+}
 .pomo-btn-b2:active {
-  transform: scale(.98);
+  transform: scale(.985);
   box-shadow: 0 2px 8px rgba(42, 29, 20, 0.04);
+}
+.pomo-btn-b2:active .pomo-b2-badge {
+  filter: brightness(1.1);
 }
 .pomo-b2-left {
   display: flex;
   align-items: center;
-  gap: 11px;
+  gap: 13px;
+  min-width: 0;
+  flex: 1;
 }
 .pomo-b2-icon {
-  width: 36px;
-  height: 36px;
+  width: 44px;
+  height: 44px;
   border-radius: 50%;
   background: var(--sea);
   display: grid;
   place-items: center;
   color: #FFFBF4;
-  box-shadow: 0 2px 6px rgba(123, 79, 46, 0.25);
+  box-shadow: 0 2px 8px rgba(123, 79, 46, 0.25);
   flex: none;
 }
 .pomo-b2-icon svg {
-  width: 18px;
-  height: 18px;
+  width: 21px;
+  height: 21px;
 }
 .pomo-b2-titles b {
   display: block;
   font-family: "Bricolage Grotesque", Figtree, sans-serif;
-  font-size: 14.5px;
+  font-size: 16.5px;
   font-weight: 700;
   color: var(--ink);
-  line-height: 1.2;
+  line-height: 1.25;
+  letter-spacing: -0.01em;
 }
 .pomo-b2-titles span {
-  font-size: 11.5px;
+  display: block;
+  font-size: 13px;
   color: var(--muted);
+  line-height: 1.25;
+  margin-top: 2px;
 }
 .pomo-b2-badge {
   background: var(--sea);
   color: var(--on-sea);
-  font-size: 11px;
+  font-size: 13.5px;
   font-weight: 700;
-  padding: 5px 11px;
+  min-height: 38px;
+  padding: 0 16px;
   border-radius: 999px;
   display: inline-flex;
   align-items: center;
-  gap: 2px;
+  justify-content: center;
+  gap: 3px;
+  flex: none;
+  box-shadow: 0 2px 8px rgba(123, 79, 46, 0.22);
 }
+body[data-theme="5"] .pomo-btn-b2,
+body[data-theme="6"] .pomo-btn-b2,
 body[data-theme="7"] .pomo-btn-b2,
 body[data-theme="8"] .pomo-btn-b2,
 body[data-theme="9"] .pomo-btn-b2 {
   background: linear-gradient(140deg, var(--surface) 10%, rgba(255, 255, 255, 0.05) 100%);
   border-color: var(--line);
 }
+body[data-theme="5"] .pomo-b2-icon,
+body[data-theme="6"] .pomo-b2-icon,
 body[data-theme="7"] .pomo-b2-icon,
 body[data-theme="8"] .pomo-b2-icon,
 body[data-theme="9"] .pomo-b2-icon {
   background: var(--sun);
   color: var(--sun-ink);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3);
 }
+body[data-theme="5"] .pomo-b2-badge,
+body[data-theme="6"] .pomo-b2-badge,
 body[data-theme="7"] .pomo-b2-badge,
 body[data-theme="8"] .pomo-b2-badge,
 body[data-theme="9"] .pomo-b2-badge {
   background: var(--sun);
   color: var(--sun-ink);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.25);
 }
 .pomo-badge {
   display: inline-flex;
