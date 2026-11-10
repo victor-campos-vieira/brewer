@@ -46,14 +46,15 @@ export function sanitizeCafeState(c){
   return c;
 }
 
-export function addCafeFocus(mins){
+export function addCafeFocus(mins, beans){
   if(!mins || mins <= 0) return;
   if(!S.cafe) S.cafe = defaultCafeState(0);
-  S.cafe.beans = (S.cafe.beans || 0) + mins;
+  var b = (beans !== undefined && beans !== null) ? beans : mins;
+  S.cafe.beans = (S.cafe.beans || 0) + b;
   S.cafe.focusMins = (S.cafe.focusMins || 0) + mins;
 }
 
-export function fresh(){return {v:3,tasks:[],blocks:{},routines:[],rdone:{},log:{},urges:[],focus:null,wait:null,draft:{taskId:'',mins:25,kind:'total',cupModel:null},tab:'hoje',cups:[],unlocked:[],goal:240,goalStart:'',weekly1:true,testWeeks:0,keepAwake:true,interruptions:[],integrations:{googleCalendar:{status:'off'}},forceModel:null,testMode:false,sessions:[],sessMig:false,estLog:[],inbox:[],moodle:{baseUrl:'',token:'',ignored:{},confirmed:{},lastSync:0,lastResult:null},cats:['Estudo','Trabalho','Projeto pessoal','Saúde','Casa','Outro'],gateShortcut:'Liberar Instagram',cafe:defaultCafeState(0)}}
+export function fresh(){return {v:3,tasks:[],blocks:{},routines:[],rdone:{},log:{},urges:[],focus:null,wait:null,draft:{taskId:'',mins:25,kind:'total',cupModel:null,pomo:{preset:'classic',focusMins:25,breakMins:5,longBreakMins:15,cycles:4}},tab:'hoje',cups:[],unlocked:[],goal:240,goalStart:'',weekly1:true,testWeeks:0,keepAwake:true,interruptions:[],integrations:{googleCalendar:{status:'off'}},forceModel:null,testMode:false,sessions:[],sessMig:false,estLog:[],inbox:[],moodle:{baseUrl:'',token:'',ignored:{},confirmed:{},lastSync:0,lastResult:null},cats:['Estudo','Trabalho','Projeto pessoal','Saúde','Casa','Outro'],gateShortcut:'Liberar Instagram',cafe:defaultCafeState(0)}}
 
 /* tarefa: campos novos sem remover nenhum dos antigos */
 export function normTask(t){
@@ -84,7 +85,9 @@ export function load(){
   var f=fresh();for(var k in f){if(!(k in s))s[k]=f[k]}
   s.tasks=(s.tasks||[]).map(normTask);
   if(!s.draft)s.draft={taskId:'',mins:25};if(!s.draft.kind)s.draft.kind='total';
-  if(s.focus&&s.focus.mode!=='focus'&&s.focus.mode!=='break'){s.lastFocus=s.focus;s.focus=null}
+  if(!s.draft.pomo)s.draft.pomo={preset:'classic',focusMins:25,breakMins:5,longBreakMins:15,cycles:4};
+  if(s.focus&&s.focus.mode!=='focus'&&s.focus.mode!=='break'&&s.focus.mode!=='pomo-ready'){s.lastFocus=s.focus;s.focus=null}
+  if(s.tab==='vontade'&&(!s.wait||Date.now()>=(s.wait.end||0))){s.tab='hoje';s.wait=null}
   if(!s.sessMig){(s.cups||[]).forEach(function(c){s.sessions.push({id:'m'+c.id,d:c.d,t0:0,t1:0,mins:c.mins||0,mode:'total',ok:!!c.ok,cupId:c.id,model:c.model,cat:c.cat||'',label:c.label||'',taskId:'',src:'manual',blockId:'',ext:'',approx:true,sim:!!c.sim})});s.sessMig=true}
   var mo=s.moodle;if(!mo.ignored)mo.ignored={};if(!mo.confirmed)mo.confirmed={};
   if(!s.cafe){
@@ -122,7 +125,7 @@ export function setPlan(t,on){
 export function subjects(){var m={};S.tasks.forEach(function(t){if(t.subject)m[t.subject]=1});S.inbox.forEach(function(t){if(t.subject)m[t.subject]=1});return Object.keys(m).sort()}
 
 /* a tela de resultado de um foco quebrado é "consumida" ao sair/entrar na aba Foco; os dados da sessão ficam em S.sessions, S.cups e S.lastFocus */
-export function archiveFocus(){var f=S.focus;if(!f||f.mode==='focus')return;S.lastFocus=f;S.focus=null}
+export function archiveFocus(){var f=S.focus;if(!f||f.mode==='focus'||f.mode==='break'||f.mode==='pomo-ready')return;S.lastFocus=f;S.focus=null}
 
 /* ---------- avisos, som ambiente, tela ligada e modal ---------- */
 var lock=null;
@@ -135,6 +138,27 @@ export function stopAmbience(){
 }
 export function setAmbience(mode){
   setAmbienceMedia(mode);
+}
+export function playZenSound(){
+  try{if(navigator.vibrate)navigator.vibrate([150,80,150])}catch(e){}
+  try{
+    var A=window.AudioContext||window.webkitAudioContext;
+    if(!A)return;
+    var c=new A(),t=c.currentTime;
+    [528,1056,1584].forEach(function(freq,i){
+      var osc=c.createOscillator(),gain=c.createGain();
+      osc.type='sine';
+      osc.frequency.setValueAtTime(freq,t);
+      var baseGain=0.15/(i+1);
+      gain.gain.setValueAtTime(0.0001,t);
+      gain.gain.exponentialRampToValueAtTime(baseGain,t+0.05);
+      gain.gain.exponentialRampToValueAtTime(0.0001,t+2.4-(i*0.4));
+      osc.connect(gain);
+      gain.connect(c.destination);
+      osc.start(t);
+      osc.stop(t+2.5);
+    });
+  }catch(e){}
 }
 export function alertUser(){
   try{if(navigator.vibrate)navigator.vibrate([200,100,200])}catch(e){}

@@ -1,5 +1,5 @@
 import { $, esc, pl, mmss, uid, today, fmtHM, fmtDur, seg } from '../utils.js';
-import { S, UI, L, save, cmp, findTask, archiveFocus, CUP_ASSETS, cupMeta, cupImg, pickModel, addCup, cupShow, v60CarafeSVG, holdScreen, releaseLock, setAmbience, alertUser, toast, openSheet, closeSheet, addCafeFocus } from '../state.js';
+import { S, UI, L, save, cmp, findTask, archiveFocus, CUP_ASSETS, cupMeta, cupImg, pickModel, addCup, cupShow, v60CarafeSVG, holdScreen, releaseLock, setAmbience, alertUser, playZenSound, toast, openSheet, closeSheet, addCafeFocus } from '../state.js';
 import { render, go } from '../app.js';
 import { notifyFocusDone, notifyBreakDone, notifyAwayWarning, notifyPermission } from '../notifications.js';
 import { setupMediaHandlers, startFocusMedia, pauseFocusMedia, resumeFocusMedia, completeFocusMedia, stopFocusMedia, updateMediaSession } from '../media.js';
@@ -22,6 +22,11 @@ export function logSession(f,mins,ok,cup){
 }
 export function breakFocus(reason,away){
   var f=S.focus;if(!f||f.mode!=='focus'||f.kind==='parcial')return;
+  if(f.isPomo){
+    toast(reason==='gaveup'?'Pomodoro interrompido. Grãos dos ciclos concluídos foram salvos!':'Pomodoro interrompido por pausa excedida.');
+    releaseLock();stopFocusMedia(false);S.focus=null;save();render();
+    return;
+  }
   var c=(f.total>=900||f.test)?addCup(false,f,f.test):null;
   var el=Math.max(0,Math.floor((Date.now()-f.startTime-(f.pauseMs||0))/60000));
   logSession(f,Math.min(el,Math.round(f.total/60)),false,c);
@@ -34,7 +39,29 @@ export function breakFocus(reason,away){
 export function completeFocus(){
   var f=S.focus;if(!f||f.mode!=='focus')return;
   var mins=Math.max(f.test?1:0,Math.round(f.total/60));f.mins=mins;
-  logFocus(mins,f);
+  if(f.isPomo&&f.pomo){
+    var cycleBeans=f.kind==='parcial'?Math.max(1,Math.floor(mins/2)):mins;
+    f.pomo.beansEarned=(f.pomo.beansEarned||0)+cycleBeans;
+    f.pomo.completedCycles=(f.pomo.completedCycles||0)+1;
+    f.beansEarned=f.pomo.beansEarned;
+    logFocus(mins,f,cycleBeans);
+    logSession(f,mins,true,null);
+    playZenSound();alertUser();
+    notifyFocusDone(mins,'Ciclo '+f.pomo.cycle+' do Pomodoro');
+    if(f.pomo.cycle>=f.pomo.totalCycles){
+      f.mode='done';f.pomo.phase='finished';releaseLock();completeFocusMedia(f);save();render();return;
+    }
+    var isLong=(f.pomo.cycle%4===0)&&(f.pomo.longBreakMins>0);
+    var breakMins=isLong?f.pomo.longBreakMins:f.pomo.breakMins;
+    var breakTot=breakMins*60;
+    f.mode='break';f.pomo.phase=isLong?'longBreak':'break';
+    f.total=breakTot;f.startTime=Date.now();f.endTime=Date.now()+breakTot*1000;
+    delete f.pausedAt;delete f.hiddenAt;
+    holdScreen();startFocusMedia(f);save();render();return;
+  }
+  var earnedBeans=f.kind==='parcial'?Math.max(1,Math.floor(mins/2)):mins;
+  f.beansEarned=earnedBeans;
+  logFocus(mins,f,earnedBeans);
   var c=cupWorthy(mins,f)?addCup(true,f,f.test):null;if(c)f.cupId=c.id;
   logSession(f,mins,true,c);
   f.mode='done';delete f.hiddenAt;alertUser();releaseLock();completeFocusMedia(f);save();render();
@@ -43,10 +70,14 @@ export function completeFocus(){
 /* foco parcial: encerrar antes registra o tempo real, sem punição */
 export function endPartial(){
   var f=S.focus;if(!f||f.mode!=='focus'||f.kind!=='parcial')return;
+  if(f.isPomo){finishPomodoroEarly();return}
   var ref=f.pausedAt||Date.now(),mins=Math.floor(Math.max(0,ref-f.startTime-(f.pauseMs||0))/60000);
   if(f.test&&mins<1)mins=1;
   if(mins<1){S.focus=null;releaseLock();stopFocusMedia(false);save();render();toast('Menos de 1 minuto: nada foi registrado.');return}
-  f.mins=mins;logFocus(mins,f);
+  f.mins=mins;
+  var earnedBeans=Math.max(1,Math.floor(mins/2));
+  f.beansEarned=earnedBeans;
+  logFocus(mins,f,earnedBeans);
   var c=cupWorthy(mins,f)?addCup(true,f,f.test):null;if(c)f.cupId=c.id;
   logSession(f,mins,true,c);
   f.early=true;f.mode='done';delete f.hiddenAt;delete f.pausedAt;releaseLock();completeFocusMedia(f);save();render();
@@ -150,12 +181,12 @@ export function effTaskId(){
   if(p)return p.id;
   var f=undone.sort(cmp)[0];return f?f.id:'';
 }
-export function logFocus(mins,f){
+export function logFocus(mins,f,beans){
   if(mins<=0)return;
   var lg0=L();lg0.focus+=mins;if(f){lg0.cats=lg0.cats||{};var ck=f.cat||'Sem categoria';lg0.cats[ck]=(lg0.cats[ck]||0)+mins}
   var t=f&&f.taskId?findTask(f.taskId):null;
   if(t)t.spent=(t.spent||0)+mins;
-  addCafeFocus(mins);
+  addCafeFocus(mins,beans);
 }
 export var KIND_NOTE={total:'Rígido: sair do app ou desistir interrompe o bloco e não pontua grãos.',parcial:'Flexível: pode pausar e encerrar antes, pontuando pelo tempo cumprido.'};
 export var TIPS=['Pegue um copo d’água e deixe o celular longe.','Abra apenas o material que você vai usar.','Organize sua mesa e vamos começar.','Deixe o celular virado para baixo.','Respire fundo e comece pela primeira pequena ação.','Feche as abas que você não vai usar.','Escolha uma única coisa para terminar neste bloco.','Ajuste a luz e a cadeira. Depois, comece.'];
@@ -222,37 +253,268 @@ export function renderPreHTML(){
     (c.gcal?'<p class="small muted" style="margin-top:8px">Compromisso do Google Agenda: começa como foco parcial.</p>':'')+
     '<div class="stack" style="margin-top:14px"><button class="btn block" data-act="pre-go">Coar café e começar</button><button class="btn quiet block" data-act="pre-skip">Pular ritual</button><button class="btn quiet block" data-act="pre-back">Voltar</button></div>';
 }
+const IC_CLOCK='<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>';
+const IC_CUP='<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 8h1a4 4 0 0 1 0 8h-1M2 8h16v9a4 4 0 0 1-4 4H6a4 4 0 0 1-4-4V8zM6 1v3M10 1v3M14 1v3"/></svg>';
+const IC_REST='<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 8h1a4 4 0 0 1 0 8h-1M2 8h16v9a4 4 0 0 1-4 4H6a4 4 0 0 1-4-4V8z"/></svg>';
+const IC_SOFA='<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 18v3M20 18v3M2 11h20M4 11V7a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v4"/></svg>';
+const IC_REPEAT='<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="1 4 1 10 7 10"/><polyline points="23 20 23 14 17 14"/><path d="M20.49 9A9 9 0 0 0 5.64 5.64L1 10m22 4l-4.64 4.36A9 9 0 0 1 3.51 15"/></svg>';
+const IC_BEAN='<svg width="15" height="15" viewBox="0 0 16 16" style="vertical-align:middle;display:inline-block;margin-right:4px" aria-hidden="true"><g transform="rotate(28 8 8)"><ellipse cx="8" cy="8" rx="4.6" ry="6.4" fill="currentColor"/><path d="M8 2.2c-2 2.5 2 5.6 0 11.6" stroke="var(--surface)" stroke-width="1.3" fill="none" stroke-linecap="round"/></g></svg>';
+
+export function pomoDots(f){
+  if(!f||!f.isPomo||!f.pomo)return '';
+  var dots='',tot=f.pomo.totalCycles||4,cur=f.pomo.cycle||1;
+  for(var i=1;i<=tot;i++){
+    var cls='pomo-dot';
+    if(i<cur||(i===cur&&f.mode==='break'))cls+=' done';
+    else if(i===cur)cls+=' curr';
+    dots+='<span class="'+cls+'" aria-label="Ciclo '+i+'"></span>';
+  }
+  return '<div class="pomo-dots">'+dots+'</div>';
+}
+
+export function pomodoroSheetHTML(cfg){
+  cfg=cfg||S.draft.pomo||{preset:'classic',focusMins:25,breakMins:5,longBreakMins:15,cycles:4,kind:'total'};
+  var fM=cfg.focusMins||25,bM=cfg.breakMins||5,lM=cfg.longBreakMins||15,cy=cfg.cycles||4;
+  var kd=cfg.kind||'total';
+  var totalFocusMins=fM*cy;
+  var totalBreakMins=bM*Math.max(0,cy-1)+(cy>=4?(lM-bM):0);
+  var maxBeans=kd==='parcial'?Math.floor(totalFocusMins/2):totalFocusMins;
+
+  var noteTotal='Rígido: cada ciclo completo rende 100% dos grãos ('+fM+' grãos por ciclo). Sair do app ou desistir interrompe o ciclo atual, mas os ciclos anteriores continuam salvos.';
+  var noteParcial='Flexível: você pode pausar ou encerrar quando quiser sem penalidade. Cada minuto cumprido rende 50% em grãos.';
+
+  return '<div class="pomo-sheet">'+
+    '<p class="muted small" style="margin-bottom:14px">Ciclos conscientes de foco com pausas estruturadas para recuperar a atenção no seu ritmo.</p>'+
+    
+    '<div class="pomo-presets">'+
+      '<button class="pomo-chip '+(cfg.preset==='espresso'?'active':'')+'" data-act="pomo-preset" data-v="espresso">'+IC_CUP+'Espresso<small>20 / 4 min</small></button>'+
+      '<button class="pomo-chip '+(cfg.preset==='classic'?'active':'')+'" data-act="pomo-preset" data-v="classic">'+IC_CUP+'Coado<small>25 / 5 min</small></button>'+
+      '<button class="pomo-chip '+(cfg.preset==='chemex'?'active':'')+'" data-act="pomo-preset" data-v="chemex">'+IC_CUP+'Chemex<small>50 / 10 min</small></button>'+
+    '</div>'+
+
+    '<div class="pomo-control-card" style="margin-bottom:10px">'+
+      '<label class="mini-lbl" style="display:block;margin-bottom:8px;font-weight:700">Regra de Foco &amp; Grãos</label>'+
+      '<div class="seg" style="margin-top:0">'+
+        '<button data-act="pomo-kind" data-v="total" aria-pressed="'+(kd==='total')+'">Foco Total (100%)</button>'+
+        '<button data-act="pomo-kind" data-v="parcial" aria-pressed="'+(kd==='parcial')+'">Foco Parcial (50%)</button>'+
+      '</div>'+
+      '<p class="small muted" id="pomoKindNote" style="margin-top:8px;line-height:1.4">'+(kd==='total'?noteTotal:noteParcial)+'</p>'+
+    '</div>'+
+
+    '<div class="pomo-control-card">'+
+      '<div class="pomo-row-head">'+
+        '<label>'+IC_CLOCK+' Tempo de Foco</label>'+
+        '<div class="dur-inline" style="gap:6px">'+
+          '<button class="btn quiet small btn-icon" data-act="pomo-step" data-f="focusMins" data-d="-5">−5</button>'+
+          '<b class="pomo-val" id="pomoFocusVal">'+fmtDur(fM)+'</b>'+
+          '<button class="btn quiet small btn-icon" data-act="pomo-step" data-f="focusMins" data-d="5">+5</button>'+
+        '</div>'+
+      '</div>'+
+      '<input type="range" class="durrange" id="pomoFocusRange" min="10" max="60" step="5" value="'+fM+'" aria-label="Tempo de foco">'+
+    '</div>'+
+
+    '<div class="pomo-control-card">'+
+      '<div class="pomo-row-head">'+
+        '<label>'+IC_REST+' Pausa Curta</label>'+
+        '<div class="dur-inline" style="gap:6px">'+
+          '<button class="btn quiet small btn-icon" data-act="pomo-step" data-f="breakMins" data-d="-1">−1</button>'+
+          '<b class="pomo-val" id="pomoBreakVal">'+bM+' min</b>'+
+          '<button class="btn quiet small btn-icon" data-act="pomo-step" data-f="breakMins" data-d="1">+1</button>'+
+        '</div>'+
+      '</div>'+
+      '<input type="range" class="durrange" id="pomoBreakRange" min="2" max="15" step="1" value="'+bM+'" aria-label="Pausa curta">'+
+    '</div>'+
+
+    '<div class="pomo-control-card">'+
+      '<div class="pomo-row-head">'+
+        '<label>'+IC_SOFA+' Pausa Longa (após 4 ciclos)</label>'+
+        '<div class="dur-inline" style="gap:6px">'+
+          '<button class="btn quiet small btn-icon" data-act="pomo-step" data-f="longBreakMins" data-d="-5">−5</button>'+
+          '<b class="pomo-val" id="pomoLongBreakVal">'+lM+' min</b>'+
+          '<button class="btn quiet small btn-icon" data-act="pomo-step" data-f="longBreakMins" data-d="5">+5</button>'+
+        '</div>'+
+      '</div>'+
+      '<input type="range" class="durrange" id="pomoLongBreakRange" min="5" max="30" step="5" value="'+lM+'" aria-label="Pausa longa">'+
+    '</div>'+
+
+    '<div class="pomo-control-card">'+
+      '<div class="pomo-row-head">'+
+        '<label>'+IC_REPEAT+' Total de Ciclos</label>'+
+        '<div class="dur-inline" style="gap:6px">'+
+          '<button class="btn quiet small btn-icon" data-act="pomo-step" data-f="cycles" data-d="-1">−1</button>'+
+          '<b class="pomo-val" id="pomoCyclesVal">'+pl(cy,'ciclo','ciclos')+'</b>'+
+          '<button class="btn quiet small btn-icon" data-act="pomo-step" data-f="cycles" data-d="1">+1</button>'+
+        '</div>'+
+      '</div>'+
+      '<input type="range" class="durrange" id="pomoCyclesRange" min="1" max="8" step="1" value="'+cy+'" aria-label="Ciclos de foco">'+
+    '</div>'+
+
+    '<div class="nudge" id="pomoSummary" style="margin-top:14px;text-align:center">'+
+      '<b>'+pl(cy,'ciclo','ciclos')+'</b> · '+fmtDur(totalFocusMins)+' de foco + '+fmtDur(totalBreakMins)+' de pausas<br>'+
+      '<span class="muted small">'+IC_BEAN+'Recompensa: até <b>'+maxBeans+' grãos</b> ('+(kd==='parcial'?'50% do tempo':'100% ao concluir ciclos')+')</span>'+
+    '</div>'+
+
+    '<div class="stack" style="margin-top:16px">'+
+      '<button class="btn sun block" data-act="start-pomo-session" style="font-size:16px;font-weight:700;padding:14px 18px">'+IC_CLOCK+' Iniciar Pomodoro</button>'+
+    '</div>'+
+  '</div>';
+}
+
+export function updatePomoSummary(){
+  var p=S.draft.pomo;if(!p)return;
+  var fv=$('#pomoFocusVal'),fr=$('#pomoFocusRange');
+  var bv=$('#pomoBreakVal'),br=$('#pomoBreakRange');
+  var lv=$('#pomoLongBreakVal'),lr=$('#pomoLongBreakRange');
+  var cv=$('#pomoCyclesVal'),cr=$('#pomoCyclesRange');
+  var sm=$('#pomoSummary');
+  var kn=$('#pomoKindNote');
+  var kd=p.kind||'total';
+
+  if(fv)fv.textContent=fmtDur(p.focusMins);
+  if(fr)fr.value=p.focusMins;
+  if(bv)bv.textContent=p.breakMins+' min';
+  if(br)br.value=p.breakMins;
+  if(lv)lv.textContent=p.longBreakMins+' min';
+  if(lr)lr.value=p.longBreakMins;
+  if(cv)cv.textContent=pl(p.cycles,'ciclo','ciclos');
+  if(cr)cr.value=p.cycles;
+  if(kn){
+    var noteTotal='Rígido: cada ciclo completo rende 100% dos grãos ('+p.focusMins+' grãos por ciclo). Sair do app ou desistir interrompe o ciclo atual, mas os ciclos anteriores continuam salvos.';
+    var noteParcial='Flexível: você pode pausar ou encerrar quando quiser sem penalidade. Cada minuto cumprido rende 50% em grãos.';
+    kn.textContent=kd==='total'?noteTotal:noteParcial;
+  }
+  if(sm){
+    var totalFocusMins=p.focusMins*p.cycles;
+    var totalBreakMins=p.breakMins*Math.max(0,p.cycles-1)+(p.cycles>=4?(p.longBreakMins-p.breakMins):0);
+    var maxBeans=kd==='parcial'?Math.floor(totalFocusMins/2):totalFocusMins;
+    sm.innerHTML='<b>'+pl(p.cycles,'ciclo','ciclos')+'</b> · '+fmtDur(totalFocusMins)+' de foco + '+fmtDur(totalBreakMins)+' de pausas<br>'+
+      '<span class="muted small">'+IC_BEAN+'Recompensa: até <b>'+maxBeans+' grãos</b> ('+(kd==='parcial'?'50% do tempo':'100% ao concluir ciclos')+')</span>';
+  }
+}
+
+export function startPomodoro(cfg){
+  cfg=cfg||S.draft.pomo||{focusMins:25,breakMins:5,longBreakMins:15,cycles:4,kind:'total'};
+  var id=effTaskId(),t=id?findTask(id):null;
+  var cl=$('#customLabel'),custom=cl?cl.value.trim():'';
+  var focusMins=cfg.focusMins||25,tot=Math.max(1,Math.round(focusMins*60));
+  var label=t?t.text:(custom||'Pomodoro de Café');
+  var pomoKind=(cfg.kind==='parcial'||(S.draft.pomo&&S.draft.pomo.kind==='parcial'))?'parcial':'total';
+  S.focus={
+    mode:'focus',
+    kind:pomoKind,
+    isPomo:true,
+    pomo:{
+      cycle:1,
+      totalCycles:cfg.cycles||4,
+      focusMins:focusMins,
+      breakMins:cfg.breakMins||5,
+      longBreakMins:cfg.longBreakMins||15,
+      phase:'focus',
+      beansEarned:0,
+      completedCycles:0
+    },
+    src:'manual',
+    taskId:t?t.id:'',
+    label:label,
+    cat:effCat(),
+    total:tot,
+    startTime:Date.now(),
+    endTime:Date.now()+tot*1000,
+    model:pickModel(),
+    starter:false,
+    test:false
+  };
+  UI.giveUp=false;UI.pre=null;clearTimeout(UI.preTimer);closeSheet();
+  holdScreen();startFocusMedia(S.focus);save();go('foco');
+}
+
+export function startNextPomoCycle(){
+  var f=S.focus;if(!f||!f.isPomo||!f.pomo)return;
+  f.pomo.cycle+=1;
+  f.pomo.phase='focus';
+  f.mode='focus';
+  var tot=Math.max(1,Math.round(f.pomo.focusMins*60));
+  f.total=tot;
+  f.startTime=Date.now();
+  f.endTime=Date.now()+tot*1000;
+  delete f.pausedAt;delete f.hiddenAt;
+  holdScreen();startFocusMedia(f);save();render();
+}
+
+export function finishPomodoroEarly(){
+  var f=S.focus;if(!f||!f.isPomo||!f.pomo)return;
+  if(f.mode==='focus'&&f.kind==='parcial'){
+    var ref=f.pausedAt||Date.now();
+    var elapsed=Math.floor(Math.max(0,ref-f.startTime-(f.pauseMs||0))/60000);
+    if(elapsed>=1){
+      var pb=Math.max(1,Math.floor(elapsed/2));
+      logFocus(elapsed,f,pb);
+      f.pomo.beansEarned=(f.pomo.beansEarned||0)+pb;
+    }
+  }
+  var totalBeans=f.pomo.beansEarned||0;
+  releaseLock();stopFocusMedia(false);S.focus=null;save();go('hoje');
+  toast('Pomodoro encerrado: +'+totalBeans+' grãos guardados na Cafeteria');
+}
+
 export function focusBuilderHTML(inHome){
   var k=today(),undone=S.tasks.filter(function(t){return !t.done}).sort(function(a,b){return ((b.plan===k)-(a.plan===k))||cmp(a,b)});
   var cur=effTaskId();
   var opts=undone.map(function(t){return '<option value="'+t.id+'"'+(t.id===cur?' selected':'')+'>'+esc(t.text)+'</option>'}).join('')+'<option value="__other"'+(cur===''?' selected':'')+'>Outra coisa / Foco livre</option>';
   var kd=S.draft.kind==='parcial'?'parcial':'total';
-  return '<div class="'+(inHome?'forest-card':'')+'">'+
-    '<div class="forest-head">'+
-      previewStageHTML(true)+
-      cupPickerHTML()+
-      durHTML()+
-    '</div>'+
-    '<div class="focus-fields">'+
-      '<select class="field field-sm" id="taskSel" aria-label="No que você vai focar?">'+opts+'</select>'+
-      (cur===''?'<input class="field field-sm" id="customLabel" type="text" maxlength="60" placeholder="O que você vai fazer agora?" style="margin-top:8px">':'')+
-      '<div class="focus-grid-2">'+
-        '<div><label class="mini-lbl" for="catSel">Categoria</label>'+catSelectHTML()+'</div>'+
-        '<div><label class="mini-lbl" for="kindSel">Modo</label><select class="field field-sm" id="kindSel" aria-label="Modo de foco"><option value="total"'+(kd==='total'?' selected':'')+'>Total (rígido)</option><option value="parcial"'+(kd==='parcial'?' selected':'')+'>Parcial (livre)</option></select></div>'+
+  var pomoBtn='<div class="pomo-btn-b2" data-act="pomo-sheet" role="button" tabindex="0">'+
+    '<div class="pomo-b2-left">'+
+      '<div class="pomo-b2-icon">'+IC_CLOCK+'</div>'+
+      '<div class="pomo-b2-titles">'+
+        '<b>Modo Pomodoro</b>'+
+        '<span>Ciclos de foco e pausas</span>'+
       '</div>'+
     '</div>'+
-    '<button class="btn block" data-act="start-focus" style="margin-top:12px">Preparar café</button>'+
+    '<div class="pomo-b2-badge">Iniciar &rsaquo;</div>'+
   '</div>';
+
+  return pomoBtn+
+    '<div class="'+(inHome?'forest-card':'')+'">'+
+      '<div class="forest-head">'+
+        previewStageHTML(true)+
+        cupPickerHTML()+
+        durHTML()+
+      '</div>'+
+      '<div class="focus-fields">'+
+        '<select class="field field-sm" id="taskSel" aria-label="No que você vai focar?">'+opts+'</select>'+
+        (cur===''?'<input class="field field-sm" id="customLabel" type="text" maxlength="60" placeholder="O que você vai fazer agora?" style="margin-top:8px">':'')+
+        '<div class="focus-grid-2">'+
+          '<div><label class="mini-lbl" for="catSel">Categoria</label>'+catSelectHTML()+'</div>'+
+          '<div><label class="mini-lbl" for="kindSel">Modo</label><select class="field field-sm" id="kindSel" aria-label="Modo de foco"><option value="total"'+(kd==='total'?' selected':'')+'>Total (rígido)</option><option value="parcial"'+(kd==='parcial'?' selected':'')+'>Parcial (livre)</option></select></div>'+
+        '</div>'+
+      '</div>'+
+      '<button class="btn block" data-act="start-focus" style="margin-top:12px">Preparar café</button>'+
+    '</div>';
 }
+
 export function activeFocusHTML(){
   var f=S.focus;
   if(f.mode==='focus'){
     var paused=!!f.pausedAt,rem=paused?f.endTime-f.pausedAt:f.endTime-Date.now();
     var gu=UI.giveUp?'<button class="btn quiet block danger" data-act="stop-focus">Tenho certeza: interromper foco</button>':'<button class="btn quiet block" data-act="give-up">Desistir</button>';
-    var btns=f.kind==='parcial'?(paused?'<div class="stack"><button class="btn block" data-act="resume">Retomar</button><button class="btn quiet block" data-act="end-partial">Encerrar foco</button></div>':'<div class="stack"><button class="btn sun block" data-act="to-urge">A vontade bateu</button><button class="btn quiet block" data-act="pause">Pausar</button><button class="btn quiet block" data-act="end-partial">Encerrar foco</button></div>'):(paused?'<div class="stack"><button class="btn block" data-act="resume">Retomar o foco</button>'+gu+'</div>':'<div class="stack"><button class="btn sun block" data-act="to-urge">A vontade bateu</button><button class="btn quiet block" data-act="pause">Pausa de emergência</button>'+gu+'</div>');
+    var btns;
+    if(f.isPomo){
+      btns=f.kind==='parcial'
+        ?(paused?'<div class="stack"><button class="btn block" data-act="resume">Retomar</button><button class="btn quiet block danger" data-act="pomo-finish-early">Encerrar Pomodoro</button></div>':'<div class="stack"><button class="btn sun block" data-act="to-urge">A vontade bateu</button><button class="btn quiet block" data-act="pause">Pausar</button><button class="btn quiet block danger" data-act="pomo-finish-early">Encerrar Pomodoro</button></div>')
+        :(paused?'<div class="stack"><button class="btn block" data-act="resume">Retomar o foco</button><button class="btn quiet block danger" data-act="pomo-finish-early">Desistir do Pomodoro</button></div>':'<div class="stack"><button class="btn sun block" data-act="to-urge">A vontade bateu</button><button class="btn quiet block" data-act="pause">Pausa de emergência</button><button class="btn quiet block danger" data-act="pomo-finish-early">Desistir do Pomodoro</button></div>');
+    } else {
+      btns=f.kind==='parcial'
+        ?(paused?'<div class="stack"><button class="btn block" data-act="resume">Retomar</button><button class="btn quiet block" data-act="end-partial">Encerrar foco</button></div>':'<div class="stack"><button class="btn sun block" data-act="to-urge">A vontade bateu</button><button class="btn quiet block" data-act="pause">Pausar</button><button class="btn quiet block" data-act="end-partial">Encerrar foco</button></div>')
+        :(paused?'<div class="stack"><button class="btn block" data-act="resume">Retomar o foco</button>'+gu+'</div>':'<div class="stack"><button class="btn sun block" data-act="to-urge">A vontade bateu</button><button class="btn quiet block" data-act="pause">Pausa de emergência</button>'+gu+'</div>');
+    }
     var sim=(S.testMode&&!paused&&f.kind!=='parcial')?'<div class="row"><button class="btn quiet small" data-act="sim-away" data-v="10">Simular 10 s fora</button><button class="btn quiet small" data-act="sim-away" data-v="30">Simular 30 s fora</button><button class="btn quiet small" data-act="sim-away" data-v="120">Simular 2 min fora</button></div>':'';
+    var headerBadge=f.isPomo
+      ?'<div class="pomo-badge">'+IC_CLOCK+' Pomodoro · Ciclo '+f.pomo.cycle+' de '+f.pomo.totalCycles+' ('+(f.kind==='parcial'?'Foco Parcial':'Foco Total')+')</div>'
+      :'<p class="muted small" style="text-transform:uppercase;letter-spacing:.06em;font-weight:700">'+esc(f.cat||'Foco')+(f.kind==='parcial'?' · Parcial':' · Foco Total')+'</p>';
+
     return '<div class="focus-immersive">'+
-      '<p class="muted small" style="text-transform:uppercase;letter-spacing:.06em;font-weight:700">'+esc(f.cat||'Foco')+(f.kind==='parcial'?' · Parcial':' · Foco Total')+'</p>'+
+      headerBadge+
+      (f.isPomo?pomoDots(f):'')+
       '<h2 style="margin-top:6px">'+esc(f.label)+'</h2>'+
       (paused?(f.kind==='parcial'?'<div class="nudge small" style="margin-top:12px">Em pausa. O tempo está parado.</div>':'<div class="nudge small" style="margin-top:12px">Pausa de emergência (máx. 10 min).</div>'):'')+
       '<div class="bigtime" id="focusTime" style="margin-top:24px">'+mmss(rem)+'</div>'+
@@ -264,19 +526,48 @@ export function activeFocusHTML(){
       '<div style="margin-top:22px">'+btns+sim+'</div>'+
     '</div>';
   }
-  if(f.mode==='done'){
-    var task=f.taskId?findTask(f.taskId):null;
-    var body=f.starter
-      ?'<p class="lead">Você começou, que era a parte difícil. Quer continuar?</p><div class="stack"><button class="btn block" data-act="more-block">Continuar por mais 25 min</button>'+(task&&!task.done?'<button class="btn quiet block" data-act="done-task">Terminei a tarefa</button>':'')+'<button class="btn quiet block" data-act="skip-break">Parar por aqui</button></div>'
-      :'<p class="lead">Você ficou '+Math.max(1,Math.round(f.total/60))+' minutos em '+esc(f.cat&&f.cat!=='Sem categoria'?f.cat:'uma coisa só')+'. Agora a pausa é sua, com hora para acabar.</p><div class="stack"><button class="btn sun block" data-act="start-break">Pausa de 5 min, celular liberado</button>'+(task&&!task.done?'<button class="btn quiet block" data-act="done-task">Marcar &ldquo;'+esc(task.text)+'&rdquo; como feita</button>':'')+'<button class="btn quiet block" data-act="skip-break">Pular pausa</button></div>';
-    var beansBadge='<div class="nudge" style="margin:16px 0;text-align:center;font-size:15px">☕ <b>+'+Math.max(1,Math.round(f.total/60))+' grãos de café</b> adicionados à sua Cafeteria!</div>';
-    return '<h1>'+(f.kind==='parcial'?'Foco parcial registrado.':'Bloco concluído!')+'</h1>'+beansBadge+(f.kind==='parcial'?partialDone(f,task):body);
-  }
   if(f.mode==='break'){
+    if(f.isPomo&&f.pomo){
+      return '<div class="focus-immersive">'+
+        '<div class="pomo-badge break">'+IC_REST+' '+(f.pomo.phase==='longBreak'?'Pausa Longa':'Pausa do Café')+' · Ciclo '+f.pomo.cycle+' de '+f.pomo.totalCycles+'</div>'+
+        pomoDots(f)+
+        '<h2 style="margin-top:6px">Momento do Café</h2>'+
+        '<div class="bigtime" id="focusTime" style="margin-top:24px">'+mmss(f.endTime-Date.now())+'</div>'+
+        '<div class="bar-track" style="max-width:280px;margin:14px auto 0"><div class="bar-fill" id="focusBar"></div></div>'+
+        '<div class="nudge" style="margin:16px 0;text-align:center;font-size:14px">'+IC_BEAN+'<b>+'+(f.pomo.beansEarned||0)+' grãos</b> colhidos até agora</div>'+
+        '<p class="lead" style="max-width:340px;margin:10px auto">Hora de alongar, tomar uma água fresca ou saborear um café. Celular liberado até o fim da pausa.</p>'+
+        '<div class="stack" style="margin-top:22px"><button class="btn sun block" data-act="pomo-start-next">Pular pausa e começar Ciclo '+(f.pomo.cycle+1)+'</button><button class="btn quiet block danger" data-act="pomo-finish-early">Encerrar Pomodoro por aqui</button></div>'+
+      '</div>';
+    }
     return '<h2>Pausa</h2><div class="bigtime" id="focusTime">'+mmss(f.endTime-Date.now())+'</div>'+
       '<div class="bar-track"><div class="bar-fill" id="focusBar"></div></div>'+
       '<p class="lead">Celular liberado até o fim do tempo. Quando acabar, ele volta para o bolso.</p>'+
       '<div class="stack"><button class="btn quiet block" data-act="skip-break">Encerrar pausa</button></div>';
+  }
+  if(f.mode==='pomo-ready'){
+    return '<div class="focus-immersive">'+
+      '<div class="pomo-badge break">'+IC_REST+' Pausa Finalizada</div>'+
+      pomoDots(f)+
+      '<h2>Pronto para o Ciclo '+(f.pomo.cycle+1)+' de '+f.pomo.totalCycles+'?</h2>'+
+      '<div class="nudge" style="margin:16px 0;text-align:center;font-size:15px">'+IC_BEAN+'<b>+'+(f.pomo.beansEarned||0)+' grãos</b> guardados na Cafeteria</div>'+
+      '<p class="lead" style="max-width:340px;margin:10px auto">A pausa terminou. Respire fundo, deixe as distrações de lado e prepare o próximo bloco de '+f.pomo.focusMins+' min.</p>'+
+      '<div class="stack" style="margin-top:24px"><button class="btn sun block" data-act="pomo-start-next" style="font-size:16px;padding:14px 18px">'+IC_CLOCK+' Iniciar Ciclo '+(f.pomo.cycle+1)+' ('+f.pomo.focusMins+' min)</button><button class="btn quiet block" data-act="pomo-finish-early">Encerrar Pomodoro e guardar grãos</button></div>'+
+    '</div>';
+  }
+  if(f.mode==='done'){
+    if(f.isPomo&&f.pomo){
+      return '<h1>Pomodoro Concluído!</h1>'+
+        '<div class="nudge" style="margin:16px 0;text-align:center;font-size:16px">'+IC_BEAN+'<b>+'+(f.pomo.beansEarned||0)+' grãos de café</b> colhidos para a sua Cafeteria!</div>'+
+        '<p class="lead">Parabéns! Você concluiu todos os <b>'+(f.pomo.completedCycles||f.pomo.totalCycles)+' ciclos</b> ('+((f.pomo.completedCycles||f.pomo.totalCycles)*f.pomo.focusMins)+' minutos focados).</p>'+
+        '<div class="stack" style="margin-top:20px"><button class="btn sun block" data-act="tab" data-tab="colecao">Ver Cafeteria</button><button class="btn quiet block" data-act="skip-break">Voltar ao Hoje</button></div>';
+    }
+    var task=f.taskId?findTask(f.taskId):null;
+    var body=f.starter
+      ?'<p class="lead">Você começou, que era a parte difícil. Quer continuar?</p><div class="stack"><button class="btn block" data-act="more-block">Continuar por mais 25 min</button>'+(task&&!task.done?'<button class="btn quiet block" data-act="done-task">Terminei a tarefa</button>':'')+'<button class="btn quiet block" data-act="skip-break">Parar por aqui</button></div>'
+      :'<p class="lead">Você ficou '+Math.max(1,Math.round(f.total/60))+' minutos em '+esc(f.cat&&f.cat!=='Sem categoria'?f.cat:'uma coisa só')+'. Agora a pausa é sua, com hora para acabar.</p><div class="stack"><button class="btn sun block" data-act="start-break">Pausa de 5 min, celular liberado</button>'+(task&&!task.done?'<button class="btn quiet block" data-act="done-task">Marcar &ldquo;'+esc(task.text)+'&rdquo; como feita</button>':'')+'<button class="btn quiet block" data-act="skip-break">Pular pausa</button></div>';
+    var earnedCount=f.beansEarned!==undefined?f.beansEarned:Math.max(1,Math.round(f.total/60));
+    var beansBadge='<div class="nudge" style="margin:16px 0;text-align:center;font-size:15px">'+IC_BEAN+'<b>+'+earnedCount+' grãos de café</b> adicionados à sua Cafeteria!</div>';
+    return '<h1>'+(f.kind==='parcial'?'Foco parcial registrado.':'Bloco concluído!')+'</h1>'+beansBadge+(f.kind==='parcial'?partialDone(f,task):body);
   }
   if(f.mode==='failed'){
     return '<h1>Bloco interrompido</h1><p class="lead">'+esc(f.msg)+' Acontece! Nenhum grão foi perdido, mas você não colheu grãos dessa vez. O importante é descansar um pouco e tentar de novo no seu ritmo.</p><div class="stack"><button class="btn block" data-act="skip-break">Tentar de novo</button><button class="btn quiet block" data-act="tab" data-tab="colecao">Ver cafeteria</button></div>';
