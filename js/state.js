@@ -85,6 +85,7 @@ export function load(){
   s.tasks=(s.tasks||[]).map(normTask);
   if(!s.draft)s.draft={taskId:'',mins:25};if(!s.draft.kind)s.draft.kind='total';
   if(s.focus&&s.focus.mode!=='focus'&&s.focus.mode!=='break'){s.lastFocus=s.focus;s.focus=null}
+  if(s.tab==='vontade'&&(!s.wait||Date.now()>=(s.wait.end||0))){s.tab='hoje';s.wait=null}
   if(!s.sessMig){(s.cups||[]).forEach(function(c){s.sessions.push({id:'m'+c.id,d:c.d,t0:0,t1:0,mins:c.mins||0,mode:'total',ok:!!c.ok,cupId:c.id,model:c.model,cat:c.cat||'',label:c.label||'',taskId:'',src:'manual',blockId:'',ext:'',approx:true,sim:!!c.sim})});s.sessMig=true}
   var mo=s.moodle;if(!mo.ignored)mo.ignored={};if(!mo.confirmed)mo.confirmed={};
   if(!s.cafe){

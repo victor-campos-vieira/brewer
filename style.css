@@ -115,7 +115,7 @@ select.field{appearance:none;-webkit-appearance:none;padding-right:42px;backgrou
 .gate-clean .breath{justify-content:center;text-align:left}
 .gate-reveal{animation:cupin .4s ease both}
 body.gate-lock,body.gate-lock #scroll{overflow:hidden!important;height:100dvh!important;touch-action:none!important}
-body.gate-lock .bar{pointer-events:none;opacity:.25;transition:opacity .25s ease}
+body.gate-lock .bar{display:none!important}
 body.focus-running .bar{display:none!important}
 body.tab-vontade .wrap{min-height:100dvh;display:flex;flex-direction:column;justify-content:center;align-items:center;padding:calc(14px + env(safe-area-inset-top,0px)) 22px calc(84px + env(safe-area-inset-bottom,14px));box-sizing:border-box}
 body.tab-vontade #tab-vontade{width:100%;margin:auto 0}
