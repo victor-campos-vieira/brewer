@@ -39,15 +39,22 @@ export function breakFocus(reason,away){
 export function completeFocus(){
   var f=S.focus;if(!f||f.mode!=='focus')return;
   var mins=Math.max(f.test?1:0,Math.round(f.total/60));f.mins=mins;
+  var bonus=0;
+  if(f.kind==='total'){
+    // Bônus de Microlote aleatório (+20% a +40%, mín 2 grãos) para incentivar Foco Total
+    bonus=Math.max(2,Math.round(mins*(0.20+Math.random()*0.20)));
+  }
   if(f.isPomo&&f.pomo){
-    var cycleBeans=f.kind==='parcial'?Math.max(1,Math.floor(mins/2)):mins;
+    var cycleBeans=mins+bonus;
     f.pomo.beansEarned=(f.pomo.beansEarned||0)+cycleBeans;
     f.pomo.completedCycles=(f.pomo.completedCycles||0)+1;
     f.beansEarned=f.pomo.beansEarned;
+    f.lastBonus=bonus;
     logFocus(mins,f,cycleBeans);
     logSession(f,mins,true,null);
     playZenSound();alertUser();
-    notifyFocusDone(mins,'Ciclo '+f.pomo.cycle+' do Pomodoro');
+    var bonusTxt=bonus?' (+'+bonus+' bônus microlote!)':'';
+    notifyFocusDone(mins,'Ciclo '+f.pomo.cycle+' do Pomodoro'+bonusTxt);
     if(f.pomo.cycle>=f.pomo.totalCycles){
       f.mode='done';f.pomo.phase='finished';releaseLock();completeFocusMedia(f);save();render();return;
     }
@@ -59,15 +66,17 @@ export function completeFocus(){
     delete f.pausedAt;delete f.hiddenAt;
     holdScreen();startFocusMedia(f);save();render();return;
   }
-  var earnedBeans=f.kind==='parcial'?Math.max(1,Math.floor(mins/2)):mins;
+  var earnedBeans=mins+bonus;
   f.beansEarned=earnedBeans;
+  f.bonusBeans=bonus;
   logFocus(mins,f,earnedBeans);
   var c=cupWorthy(mins,f)?addCup(true,f,f.test):null;if(c)f.cupId=c.id;
   logSession(f,mins,true,c);
   f.mode='done';delete f.hiddenAt;alertUser();releaseLock();completeFocusMedia(f);save();render();
-  notifyFocusDone(mins, f.label);
+  var bonusTxt2=bonus?' (+'+bonus+' bônus safra!)':'';
+  notifyFocusDone(mins, f.label+bonusTxt2);
 }
-/* foco parcial: encerrar antes registra o tempo real, sem punição */
+/* foco parcial: encerrar antes registra o tempo real, pontuando 50% dos minutos cumpridos */
 export function endPartial(){
   var f=S.focus;if(!f||f.mode!=='focus'||f.kind!=='parcial')return;
   if(f.isPomo){finishPomodoroEarly();return}
@@ -188,7 +197,10 @@ export function logFocus(mins,f,beans){
   if(t)t.spent=(t.spent||0)+mins;
   addCafeFocus(mins,beans);
 }
-export var KIND_NOTE={total:'Rígido: sair do app ou desistir interrompe o bloco e não pontua grãos.',parcial:'Flexível: pode pausar e encerrar antes, pontuando pelo tempo cumprido.'};
+export var KIND_NOTE={
+  total:'Rígido (All-or-nothing): complete o bloco para ganhar o valor cheio + Bônus de Microlote (+20% a +40%). Sair do app ou desistir zera a colheita.',
+  parcial:'Flexível: conclua o tempo para ganhar 100% dos grãos. Se precisar pausar ou encerrar antes, pontua a metade (50%) dos minutos cumpridos.'
+};
 export var TIPS=['Pegue um copo d’água e deixe o celular longe.','Abra apenas o material que você vai usar.','Organize sua mesa e vamos começar.','Deixe o celular virado para baixo.','Respire fundo e comece pela primeira pequena ação.','Feche as abas que você não vai usar.','Escolha uma única coisa para terminar neste bloco.','Ajuste a luz e a cadeira. Depois, comece.'];
 export function pickTip(cfg){
   var pool=TIPS.slice(),h=new Date().getHours();
@@ -280,8 +292,8 @@ export function pomodoroSheetHTML(cfg){
   var totalBreakMins=bM*Math.max(0,cy-1)+(cy>=4?(lM-bM):0);
   var maxBeans=kd==='parcial'?Math.floor(totalFocusMins/2):totalFocusMins;
 
-  var noteTotal='Rígido: cada ciclo completo rende 100% dos grãos ('+fM+' grãos por ciclo). Sair do app ou desistir interrompe o ciclo atual, mas os ciclos anteriores continuam salvos.';
-  var noteParcial='Flexível: você pode pausar ou encerrar quando quiser sem penalidade. Cada minuto cumprido rende 50% em grãos.';
+  var noteTotal='Rígido (All-or-nothing): conclua cada ciclo para ganhar o valor cheio + Bônus de Microlote (+20% a +40% grãos extras). Sair do app ou desistir zera a colheita do ciclo.';
+  var noteParcial='Flexível: conclua o tempo para ganhar 100% dos grãos. Se precisar pausar ou encerrar antes, pontua a metade (50%) dos minutos cumpridos.';
 
   return '<div class="pomo-sheet">'+
     '<p class="muted small" style="margin-bottom:14px">Ciclos conscientes de foco com pausas estruturadas para recuperar a atenção no seu ritmo.</p>'+
@@ -295,8 +307,8 @@ export function pomodoroSheetHTML(cfg){
     '<div class="pomo-control-card" style="margin-bottom:10px">'+
       '<label class="mini-lbl" style="display:block;margin-bottom:8px;font-weight:700">Regra de Foco &amp; Grãos</label>'+
       '<div class="seg" style="margin-top:0">'+
-        '<button data-act="pomo-kind" data-v="total" aria-pressed="'+(kd==='total')+'">Foco Total (100%)</button>'+
-        '<button data-act="pomo-kind" data-v="parcial" aria-pressed="'+(kd==='parcial')+'">Foco Parcial (50%)</button>'+
+        '<button data-act="pomo-kind" data-v="total" aria-pressed="'+(kd==='total')+'">Foco Total</button>'+
+        '<button data-act="pomo-kind" data-v="parcial" aria-pressed="'+(kd==='parcial')+'">Foco Parcial</button>'+
       '</div>'+
       '<p class="small muted" id="pomoKindNote" style="margin-top:8px;line-height:1.4">'+(kd==='total'?noteTotal:noteParcial)+'</p>'+
     '</div>'+
@@ -566,7 +578,8 @@ export function activeFocusHTML(){
       ?'<p class="lead">Você começou, que era a parte difícil. Quer continuar?</p><div class="stack"><button class="btn block" data-act="more-block">Continuar por mais 25 min</button>'+(task&&!task.done?'<button class="btn quiet block" data-act="done-task">Terminei a tarefa</button>':'')+'<button class="btn quiet block" data-act="skip-break">Parar por aqui</button></div>'
       :'<p class="lead">Você ficou '+Math.max(1,Math.round(f.total/60))+' minutos em '+esc(f.cat&&f.cat!=='Sem categoria'?f.cat:'uma coisa só')+'. Agora a pausa é sua, com hora para acabar.</p><div class="stack"><button class="btn sun block" data-act="start-break">Pausa de 5 min, celular liberado</button>'+(task&&!task.done?'<button class="btn quiet block" data-act="done-task">Marcar &ldquo;'+esc(task.text)+'&rdquo; como feita</button>':'')+'<button class="btn quiet block" data-act="skip-break">Pular pausa</button></div>';
     var earnedCount=f.beansEarned!==undefined?f.beansEarned:Math.max(1,Math.round(f.total/60));
-    var beansBadge='<div class="nudge" style="margin:16px 0;text-align:center;font-size:15px">'+IC_BEAN+'<b>+'+earnedCount+' grãos de café</b> adicionados à sua Cafeteria!</div>';
+    var bonusExtra=f.bonusBeans?'<span style="display:block;font-size:12px;margin-top:4px;color:var(--sun)">✨ Inclui +'+f.bonusBeans+' grãos de Bônus de Microlote por Foco Total!</span>':'';
+    var beansBadge='<div class="nudge" style="margin:16px 0;text-align:center;font-size:15px">'+IC_BEAN+'<b>+'+earnedCount+' grãos de café</b> adicionados à sua Cafeteria!'+bonusExtra+'</div>';
     return '<h1>'+(f.kind==='parcial'?'Foco parcial registrado.':'Bloco concluído!')+'</h1>'+beansBadge+(f.kind==='parcial'?partialDone(f,task):body);
   }
   if(f.mode==='failed'){

@@ -1,5 +1,5 @@
 /* Brewer: cache offline. Troque o número da versão sempre que alterar arquivos publicados. */
-const CACHE = 'brewer-v41';
+const CACHE = 'brewer-v42';
 const APP_SHELL = [
   './',
   './index.html',
@@ -51,14 +51,15 @@ self.addEventListener('fetch', e => {
   if (url.origin !== self.location.origin) return;
   const isCode = e.request.mode === 'navigate' || /\.(html|css|js|json)$/.test(url.pathname) || url.pathname.endsWith('/');
   e.respondWith(caches.open(CACHE).then(async cache => {
-    const cached = await cache.match(e.request, { ignoreSearch: !isCode });
-    if (isCode) {
-      const net = fetch(e.request, { cache: 'no-cache' }).then(r => { if (r && r.ok) cache.put(e.request, r.clone()); return r; });
-      const timeout = new Promise((_, rej) => setTimeout(() => rej(new Error('timeout')), 3000));
-      return Promise.race([net, timeout]).catch(() => cached || net.catch(() => cache.match('./index.html')));
-    }
-    const net = fetch(e.request).then(r => { if (r && r.ok) cache.put(e.request, r.clone()); return r; }).catch(() => cached || cache.match('./index.html'));
-    return cached || net;
+    const cached = await cache.match(e.request, { ignoreSearch: !isCode }) || (isCode ? await cache.match('./index.html') : null);
+    const net = fetch(e.request).then(r => {
+      if (r && r.ok) cache.put(e.request, r.clone());
+      return r;
+    }).catch(() => null);
+
+    // Se já estiver em cache, entrega imediatamente sem esperar a rede (0ms - zero tela branca e sem delay)
+    if (cached) return cached;
+    return net.then(r => r || cache.match('./index.html'));
   }));
 });
 
