@@ -265,8 +265,8 @@ export function completeFocusMedia(f) {
       var mins = f ? Math.max(1, f.mins || Math.round(f.total / 60)) : 25;
       navigator.mediaSession.playbackState = 'none';
       navigator.mediaSession.metadata = new MediaMetadata({
-        title: '☕ Bloco feito! (' + mins + ' min)',
-        artist: 'Brewer · Xícara na coleção',
+        title: (f && f.isPomo ? '☕ Pomodoro feito!' : '☕ Bloco feito!') + ' (' + mins + ' min)',
+        artist: 'Brewer · Cafeteria',
         album: (f && f.label) || 'Ritual de Foco',
         artwork: getArtwork(f)
       });
@@ -328,9 +328,15 @@ export function updateMediaSession(f, force) {
   var album = '';
 
   if (isBreak) {
-    title = (paused ? '⏸️ ' : '') + mmss(rem) + ' restantes · Pausa';
-    artist = 'Brewer · Celular Liberado';
-    album = 'Descanso pós-foco';
+    if (f && f.isPomo && f.pomo) {
+      title = (paused ? '⏸️ ' : '') + mmss(rem) + ' · Pausa do Café';
+      artist = 'Ciclo ' + f.pomo.cycle + ' de ' + f.pomo.totalCycles + ' Concluído · Brewer';
+      album = '☕ Pausa Pomodoro (+ ' + (f.pomo.beansEarned || 0) + ' grãos)';
+    } else {
+      title = (paused ? '⏸️ ' : '') + mmss(rem) + ' restantes · Pausa';
+      artist = 'Brewer · Celular Liberado';
+      album = 'Descanso pós-foco';
+    }
   } else {
     var label = f.label || 'Foco livre';
     if (paused) {
@@ -338,10 +344,15 @@ export function updateMediaSession(f, force) {
     } else {
       title = mmss(rem) + ' restantes · ' + label;
     }
-    artist = '☕ Brewer' + (f.cat && f.cat !== 'Sem categoria' ? ' · ' + f.cat : '');
-    album = (f.kind === 'parcial' ? 'Foco Parcial' : 'Foco Total');
-    if (f.model != null && cupMeta(f.model)) {
-      album += ' · Xícara ' + cupMeta(f.model).name;
+    if (f && f.isPomo && f.pomo) {
+      artist = '☕ Pomodoro (Ciclo ' + f.pomo.cycle + '/' + f.pomo.totalCycles + ')';
+      album = (f.cat && f.cat !== 'Sem categoria' ? f.cat + ' · ' : '') + (f.kind === 'parcial' ? 'Foco Parcial' : 'Foco Total');
+    } else {
+      artist = '☕ Brewer' + (f.cat && f.cat !== 'Sem categoria' ? ' · ' + f.cat : '');
+      album = (f.kind === 'parcial' ? 'Foco Parcial' : 'Foco Total');
+      if (f.model != null && cupMeta(f.model)) {
+        album += ' · Xícara ' + cupMeta(f.model).name;
+      }
     }
   }
 

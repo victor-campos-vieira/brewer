@@ -1,10 +1,10 @@
 import { $, mmss, uid, today, addDays, toMin, nowMin, fmtShort, mondayOf } from './utils.js';
-import { S, UI, SH, resetState, save, L, cmp, findTask, normTask, setDone, planned, setPlan, archiveFocus, currentGoal, updateTheme, screenStatusHTML, CUP_ASSETS, cupMeta, addCup, cupFallback, heroFallbackHTML, holdScreen, releaseLock, setAmbience, alertUser, toast, closeSheet } from './state.js';
+import { S, UI, SH, resetState, save, L, cmp, findTask, normTask, setDone, planned, setPlan, archiveFocus, currentGoal, updateTheme, screenStatusHTML, CUP_ASSETS, cupMeta, addCup, cupFallback, heroFallbackHTML, holdScreen, releaseLock, setAmbience, alertUser, playZenSound, toast, openSheet, closeSheet } from './state.js';
 import { gcCfg, gcResetToken, gcRun, gcDiag, gcDisconnect, gcToggleCal, gcReloadCals, mdSync, mdFile, confirmInbox, ignoreInbox } from './sync.js';
 import { renderHoje, prioSheet } from './views/hoje.js';
 import { suggestionsFor, placeSuggestion, plannerSheet, blockSheet, PRESETS, dayChips, routineSheet, renderAgenda } from './views/agenda.js';
 import { prioChips, applyPhrase, startVoice, readForm, taskSheet, inboxSheet, renderTarefas } from './views/tarefas.js';
-import { AWAY_ASK_MS, breakFocus, completeFocus, endPartial, checkReturn, answerReturn, pauseFocus, resumeFocus, effCat, effTaskId, openRitual, beginFocus, startFocus, updateDur, setKindUI, renderFoco } from './views/foco.js';
+import { AWAY_ASK_MS, breakFocus, completeFocus, endPartial, checkReturn, answerReturn, pauseFocus, resumeFocus, effCat, effTaskId, openRitual, beginFocus, startFocus, updateDur, setKindUI, renderFoco, startPomodoro, startNextPomoCycle, finishPomodoroEarly, pomodoroSheetHTML, updatePomoSummary } from './views/foco.js';
 import { WX, WY, startGate, selectFeel, start10m, gateStay, gateOpenApp, gateConfig, gateBtnText, startWait, logUrge, finishWait, renderVontade } from './views/vontade.js';
 import { renderRevisao } from './views/revisao.js';
 import { renderColecao } from './views/colecao.js';
@@ -66,7 +66,7 @@ export function render(){
   TABS.forEach(function(t){$('#tab-'+t).hidden=(t!==S.tab)});
   document.body.classList.toggle('tab-vontade', S.tab === 'vontade');
   document.body.classList.toggle('tab-colecao-active', S.tab === 'colecao');
-  document.body.classList.toggle('focus-running', S.tab === 'foco' && !!(S.focus && (S.focus.mode === 'focus' || S.focus.mode === 'break')));
+  document.body.classList.toggle('focus-running', S.tab === 'foco' && !!(S.focus && (S.focus.mode === 'focus' || S.focus.mode === 'break' || S.focus.mode === 'pomo-ready')));
   document.querySelectorAll('.bar button').forEach(function(b){b.setAttribute('aria-current',b.dataset.tab===(['colecao','jornada','foco'].indexOf(S.tab)>-1?'hoje':S.tab)?'page':'false')});
   updateTheme();
   ({hoje:renderHoje,agenda:renderAgenda,tarefas:renderTarefas,foco:renderFoco,vontade:renderVontade,revisao:renderRevisao,colecao:renderColecao,jornada:renderJornada})[S.tab]();
@@ -98,7 +98,7 @@ export function updateLive(){
   var now=Date.now(),f=S.focus,s=S.wait,title='Brewer';
   var navLocked=!!((S.tab==='vontade'&&s&&s.phase==='gate'&&now<s.end)||(S.tab==='foco'&&(UI.pre||(f&&f.mode==='focus'))));
   document.body.classList[navLocked?'add':'remove']('gate-lock');
-  document.body.classList.toggle('focus-running', S.tab === 'foco' && !!(f && (f.mode === 'focus' || f.mode === 'break')));
+  document.body.classList.toggle('focus-running', S.tab === 'foco' && !!(f && (f.mode === 'focus' || f.mode === 'break' || f.mode === 'pomo-ready')));
   if(f&&(f.mode==='focus'||f.mode==='break')){
     var rem=f.pausedAt?f.endTime-f.pausedAt:f.endTime-now;
     var ft=$('#focusTime');if(ft)ft.textContent=mmss(rem);
@@ -132,7 +132,20 @@ setInterval(function(){
   if(f&&f.mode==='focus'&&f.kind!=='parcial'&&!f.pausedAt&&!f.hiddenAt&&gap>AWAY_ASK_MS&&!document.hidden){f.hiddenAt=now-gap;save()}
   if(f&&f.mode==='focus'&&f.hiddenAt&&!document.hidden)checkReturn();
   if(f&&f.mode==='focus'&&!f.pausedAt&&!f.hiddenAt&&!UI.asking&&now>=f.endTime){completeFocus();return}
-  if(f&&f.mode==='break'&&now>=f.endTime){f.mode='breakdone';ch=true;alertUser();notifyBreakDone()}
+  if(f&&f.mode==='break'&&now>=f.endTime){
+    if(f.isPomo){
+      f.mode='pomo-ready';
+      ch=true;
+      alertUser();
+      playZenSound();
+      notifyBreakDone();
+    } else {
+      f.mode='breakdone';
+      ch=true;
+      alertUser();
+      notifyBreakDone();
+    }
+  }
   if(S.wait&&S.wait.phase==='gate'&&!S.wait.notified&&now>=S.wait.end){S.wait.notified=true;ch=true}
   if(S.wait&&S.wait.phase==='wait'&&now>=S.wait.end){S.wait.phase='end';ch=true;alertUser();releaseLock()}
   if(ch){save();render()}else updateLive();
@@ -255,6 +268,29 @@ document.addEventListener('click',function(e){
     case 'start-focus':
       var cl2=$('#customLabel'),tid=effTaskId(),tk=tid?findTask(tid):null;
       openRitual({mins:S.draft.mins,kind:S.draft.kind,taskId:tid,label:tk?tk.text:((cl2&&cl2.value.trim())||'Foco livre'),cat:effCat()||'Sem categoria',src:'manual'});break;
+    case 'pomo-sheet':openSheet('☕ Modo Pomodoro',pomodoroSheetHTML());break;
+    case 'pomo-preset':
+      var pr=el.dataset.v,dp=S.draft.pomo=S.draft.pomo||{cycles:4};
+      dp.preset=pr;
+      if(pr==='espresso'){dp.focusMins=20;dp.breakMins=4;dp.longBreakMins=15;dp.cycles=4}
+      else if(pr==='chemex'){dp.focusMins=50;dp.breakMins=10;dp.longBreakMins=20;dp.cycles=4}
+      else{dp.focusMins=25;dp.breakMins=5;dp.longBreakMins=15;dp.cycles=4}
+      document.querySelectorAll('.pomo-chip').forEach(function(c){c.classList.toggle('active',c.dataset.v===pr)});
+      updatePomoSummary();save();break;
+    case 'pomo-step':
+      var fld=el.dataset.f,delta=+el.dataset.d;
+      var dp2=S.draft.pomo=S.draft.pomo||{focusMins:25,breakMins:5,longBreakMins:15,cycles:4};
+      dp2.preset='custom';
+      document.querySelectorAll('.pomo-chip').forEach(function(c){c.classList.remove('active')});
+      if(fld==='focusMins')dp2.focusMins=Math.min(60,Math.max(10,(dp2.focusMins||25)+delta));
+      else if(fld==='breakMins')dp2.breakMins=Math.min(15,Math.max(2,(dp2.breakMins||5)+delta));
+      else if(fld==='longBreakMins')dp2.longBreakMins=Math.min(30,Math.max(5,(dp2.longBreakMins||15)+delta));
+      else if(fld==='cycles')dp2.cycles=Math.min(8,Math.max(1,(dp2.cycles||4)+delta));
+      updatePomoSummary();save();break;
+    case 'start-pomo-session':startPomodoro();break;
+    case 'pomo-start-next':
+    case 'pomo-skip-break':startNextPomoCycle();break;
+    case 'pomo-finish-early':finishPomodoroEarly();break;
     case 'pre-kind':if(UI.pre){UI.pre.cfg.kind=el.dataset.v==='parcial'?'parcial':'total';render()}break;
     case 'pre-go':if(UI.pre){primeFocusAudio(UI.amb);UI.pre.step='v60';clearTimeout(UI.preTimer);UI.preTimer=setTimeout(beginFocus,2400);render()}break;
     case 'pre-skip':primeFocusAudio(UI.amb);clearTimeout(UI.preTimer);beginFocus();break;
@@ -418,7 +454,20 @@ document.addEventListener('change',function(e){
   save();var ss=$('#screenStatus');if(ss)ss.innerHTML=screenStatusHTML();updateTheme();
 });
 
-document.addEventListener('input',function(e){var t=e.target;if(t&&t.id==='durRange'){S.draft.mins=+t.value;updateDur()}});
+document.addEventListener('input',function(e){
+  var t=e.target;if(!t)return;
+  if(t.id==='durRange'){S.draft.mins=+t.value;updateDur();return}
+  if(t.id==='pomoFocusRange'||t.id==='pomoBreakRange'||t.id==='pomoLongBreakRange'||t.id==='pomoCyclesRange'){
+    var dp=S.draft.pomo=S.draft.pomo||{focusMins:25,breakMins:5,longBreakMins:15,cycles:4};
+    dp.preset='custom';
+    document.querySelectorAll('.pomo-chip').forEach(function(c){c.classList.remove('active')});
+    if(t.id==='pomoFocusRange')dp.focusMins=+t.value;
+    if(t.id==='pomoBreakRange')dp.breakMins=+t.value;
+    if(t.id==='pomoLongBreakRange')dp.longBreakMins=+t.value;
+    if(t.id==='pomoCyclesRange')dp.cycles=+t.value;
+    updatePomoSummary();save();return;
+  }
+});
 checkGateParam();
 render();
 checkReturn();
