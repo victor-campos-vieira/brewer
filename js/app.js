@@ -62,6 +62,7 @@ export function go(tab){
   window.scrollTo(0,0);
 }
 export function render(){
+  document.documentElement.classList.remove('gate-lock');
   if(TABS.indexOf(S.tab)<0)S.tab='hoje';
   TABS.forEach(function(t){$('#tab-'+t).hidden=(t!==S.tab)});
   document.body.classList.toggle('tab-vontade', S.tab === 'vontade');
@@ -157,8 +158,9 @@ function markAway(){
   /* Sempre que sair/fechar o Brewer (se não estiver em foco ativo), engatilha a tela Bateu a Vontade para a próxima abertura */
   if(!f||(f.mode!=='focus'&&f.mode!=='break')){
     S.tab='vontade';
-    S.wait=null;
+    startGate((S.wait&&S.wait.app)||'Instagram');
     save();
+    render();
   }else if(S.tab==='vontade'&&S.wait&&S.wait.phase==='gate'){
     S.wait=null;
     save();
