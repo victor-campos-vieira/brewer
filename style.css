@@ -677,53 +677,87 @@ body.tab-colecao-active #tab-colecao {
   border-color: var(--sea);
 }
 
-/* ---------- Pomodoro Café ---------- */
-.pomo-launch-btn {
-  background: var(--sun);
-  color: var(--sun-ink);
-  font-family: "Bricolage Grotesque", Figtree, sans-serif;
-  font-weight: 700;
-  font-size: 15px;
-  letter-spacing: -.01em;
+/* ---------- Pomodoro Café (Opção B2) ---------- */
+.pomo-btn-b2 {
+  width: 100%;
+  min-height: 58px;
+  border-radius: 22px;
+  background: linear-gradient(140deg, var(--surface) 10%, #E8DCC9 100%);
+  border: 1.5px solid var(--line);
+  padding: 8px 14px 8px 12px;
   display: flex;
   align-items: center;
-  justify-content: center;
-  gap: 10px;
-  min-height: 52px;
-  padding: 0 18px;
-  border-radius: 16px;
-  border: 1px solid rgba(0, 0, 0, 0.06);
-  box-shadow: 0 4px 14px rgba(201, 138, 36, 0.25);
-  margin-bottom: 18px;
-  width: 100%;
+  justify-content: space-between;
+  box-shadow: 0 4px 16px rgba(42, 29, 20, 0.06);
+  margin-bottom: 16px;
   cursor: pointer;
+  box-sizing: border-box;
   transition: transform .12s ease, box-shadow .12s ease;
 }
-.pomo-launch-btn:active {
-  transform: scale(0.98);
-  box-shadow: 0 2px 6px rgba(201, 138, 36, 0.18);
+.pomo-btn-b2:active {
+  transform: scale(.98);
+  box-shadow: 0 2px 8px rgba(42, 29, 20, 0.04);
 }
-.pomo-launch-btn svg {
-  width: 20px;
-  height: 20px;
+.pomo-b2-left {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+}
+.pomo-b2-icon {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: var(--sea);
+  display: grid;
+  place-items: center;
+  color: #FFFBF4;
+  box-shadow: 0 2px 6px rgba(123, 79, 46, 0.25);
   flex: none;
 }
-.pomo-launch-tag {
-  background: rgba(43, 26, 0, 0.12);
-  color: var(--sun-ink);
-  font-family: Figtree, sans-serif;
+.pomo-b2-icon svg {
+  width: 18px;
+  height: 18px;
+}
+.pomo-b2-titles b {
+  display: block;
+  font-family: "Bricolage Grotesque", Figtree, sans-serif;
+  font-size: 14.5px;
+  font-weight: 700;
+  color: var(--ink);
+  line-height: 1.2;
+}
+.pomo-b2-titles span {
+  font-size: 11.5px;
+  color: var(--muted);
+}
+.pomo-b2-badge {
+  background: var(--sea);
+  color: var(--on-sea);
   font-size: 11px;
   font-weight: 700;
-  padding: 3px 8px;
-  border-radius: 99px;
-  text-transform: uppercase;
-  letter-spacing: .04em;
-  margin-left: 2px;
+  padding: 5px 11px;
+  border-radius: 999px;
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
 }
-body[data-theme="7"] .pomo-launch-tag,
-body[data-theme="8"] .pomo-launch-tag,
-body[data-theme="9"] .pomo-launch-tag {
-  background: rgba(0, 0, 0, 0.2);
+body[data-theme="7"] .pomo-btn-b2,
+body[data-theme="8"] .pomo-btn-b2,
+body[data-theme="9"] .pomo-btn-b2 {
+  background: linear-gradient(140deg, var(--surface) 10%, rgba(255, 255, 255, 0.05) 100%);
+  border-color: var(--line);
+}
+body[data-theme="7"] .pomo-b2-icon,
+body[data-theme="8"] .pomo-b2-icon,
+body[data-theme="9"] .pomo-b2-icon {
+  background: var(--sun);
+  color: var(--sun-ink);
+}
+body[data-theme="7"] .pomo-b2-badge,
+body[data-theme="8"] .pomo-b2-badge,
+body[data-theme="9"] .pomo-b2-badge {
+  background: var(--sun);
+  color: var(--sun-ink);
 }
 .pomo-badge {
   display: inline-flex;

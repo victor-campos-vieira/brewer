@@ -1,0 +1,400 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Brewer · Teste de Ícone Invertido na Opção B</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,700;12..96,800&family=Figtree:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../style.css">
+<style>
+  body {
+    background: #EFE7DA;
+    padding: 30px 16px 60px;
+    font-family: Figtree, sans-serif;
+    color: var(--ink);
+  }
+  .header {
+    max-width: 1100px;
+    margin: 0 auto 26px;
+    text-align: center;
+  }
+  .header h1 {
+    font-family: "Bricolage Grotesque", Figtree, sans-serif;
+    font-size: 26px;
+    font-weight: 800;
+    letter-spacing: -.02em;
+    color: var(--ink);
+    margin-bottom: 6px;
+  }
+  .header p {
+    color: var(--muted);
+    font-size: 14.5px;
+    max-width: 600px;
+    margin: 0 auto;
+  }
+  .board {
+    display: flex;
+    gap: 28px;
+    justify-content: center;
+    flex-wrap: wrap;
+    max-width: 1240px;
+    margin: 0 auto;
+  }
+  .concept-card {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+  }
+  .concept-title {
+    font-family: "Bricolage Grotesque", Figtree, sans-serif;
+    font-weight: 700;
+    font-size: 15px;
+    color: var(--ink);
+    margin-bottom: 4px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .concept-desc {
+    font-size: 12.5px;
+    color: var(--muted);
+    margin-bottom: 12px;
+    text-align: center;
+    max-width: 330px;
+    min-height: 36px;
+  }
+  .phone {
+    width: 345px;
+    min-height: 660px;
+    background: var(--bg);
+    border-radius: 38px;
+    box-shadow: 0 18px 44px rgba(42, 29, 20, 0.14), 0 0 0 1px var(--line);
+    overflow: hidden;
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    padding: 22px 18px 24px;
+    box-sizing: border-box;
+  }
+  .phone-screen {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+  }
+  .mock-nav {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 14px;
+  }
+  .mock-title {
+    font-family: "Bricolage Grotesque", Figtree, sans-serif;
+    font-size: 20px;
+    font-weight: 700;
+  }
+
+  /* Base do Card B (degradê café com leite suave + borda 22px) */
+  .pomo-btn-b {
+    width: 100%;
+    min-height: 58px;
+    border-radius: 22px;
+    background: linear-gradient(140deg, var(--surface) 10%, #E8DCC9 100%);
+    border: 1.5px solid var(--line);
+    padding: 8px 14px 8px 12px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    box-shadow: 0 4px 16px rgba(42, 29, 20, 0.06);
+    margin-bottom: 16px;
+    cursor: pointer;
+    box-sizing: border-box;
+    transition: transform .12s ease;
+  }
+  .pomo-btn-b:active {
+    transform: scale(.98);
+  }
+  .pomo-b-left {
+    display: flex;
+    align-items: center;
+    gap: 11px;
+  }
+  .pomo-b-titles b {
+    display: block;
+    font-family: "Bricolage Grotesque", Figtree, sans-serif;
+    font-size: 14.5px;
+    font-weight: 700;
+    color: var(--ink);
+    line-height: 1.2;
+  }
+  .pomo-b-titles span {
+    font-size: 11.5px;
+    color: var(--muted);
+  }
+
+  /* --- Ícone B1: Cantos Suaves (12px) Marrom + Relógio Branco --- */
+  .pomo-ic-b1 {
+    width: 36px;
+    height: 36px;
+    border-radius: 12px;
+    background: var(--sea);
+    display: grid;
+    place-items: center;
+    color: #FFFBF4;
+    box-shadow: 0 2px 6px rgba(123, 79, 46, 0.25);
+    flex: none;
+  }
+
+  /* --- Ícone B2: Círculo (50%) Marrom + Relógio Branco --- */
+  .pomo-ic-b2 {
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    background: var(--sea);
+    display: grid;
+    place-items: center;
+    color: #FFFBF4;
+    box-shadow: 0 2px 6px rgba(123, 79, 46, 0.25);
+    flex: none;
+  }
+
+  /* --- Ícone B3: Marrom Profundo com Seta Simples na Direita --- */
+  .pomo-ic-b3 {
+    width: 38px;
+    height: 38px;
+    border-radius: 13px;
+    background: #633E23;
+    display: grid;
+    place-items: center;
+    color: #FFFBF4;
+    box-shadow: 0 3px 8px rgba(99, 62, 35, 0.3);
+    flex: none;
+  }
+
+  .pomo-badge-fill {
+    background: var(--sea);
+    color: var(--on-sea);
+    font-size: 11px;
+    font-weight: 700;
+    padding: 5px 11px;
+    border-radius: 999px;
+  }
+  .pomo-arrow-simple {
+    color: var(--sea);
+    font-size: 20px;
+    font-weight: 700;
+    padding-right: 4px;
+  }
+
+  /* Card de preparo clássico embaixo */
+  .mock-card {
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: 24px;
+    padding: 16px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+  }
+  .mock-carafe {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    padding: 10px 0 6px;
+  }
+  .mock-carafe img {
+    width: 76px;
+    height: 76px;
+    object-fit: contain;
+  }
+  .mock-dur {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+    margin: 8px 0 12px;
+  }
+  .mock-dur-val {
+    font-family: "Bricolage Grotesque", Figtree, sans-serif;
+    font-size: 20px;
+    font-weight: 700;
+  }
+  .mock-field {
+    width: 100%;
+    min-height: 42px;
+    border-radius: 12px;
+    border: 1.5px solid var(--line);
+    background: var(--bg);
+    display: flex;
+    align-items: center;
+    padding: 0 12px;
+    font-size: 13px;
+    color: var(--muted);
+    margin-bottom: 8px;
+    box-sizing: border-box;
+  }
+  .mock-btn {
+    min-height: 48px;
+    border-radius: 999px;
+    background: var(--sea);
+    color: var(--on-sea);
+    font-weight: 700;
+    font-size: 14px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: none;
+    width: 100%;
+    margin-top: 8px;
+  }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <h1>Opção B com Ícone Invertido (Fundo Marrom + Relógio Branco)</h1>
+  <p>Mantendo o degradê suave de café com leite, a altura compacta e os cantos arredondados, veja como o ícone marrom com relógio branco se comporta:</p>
+</div>
+
+<div class="board">
+
+  <!-- TESTE 1: Quadrado Arredondado (12px) + Pílula Iniciar -->
+  <div class="concept-card">
+    <div class="concept-title">B1 · Ícone Quadrado Arredondado + Pílula "Iniciar ›"</div>
+    <div class="concept-desc">Caixa do relógio marrom com cantos arredondados (12px), relógio branco com bom contraste e pílula marrom "Iniciar ›" na direita.</div>
+    <div class="phone">
+      <div class="phone-screen">
+        <div class="mock-nav">
+          <span class="mock-title">Foco</span>
+        </div>
+
+        <!-- Botão B1 -->
+        <div class="pomo-btn-b">
+          <div class="pomo-b-left">
+            <div class="pomo-ic-b1">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+            </div>
+            <div class="pomo-b-titles">
+              <b>Modo Pomodoro</b>
+              <span>Ciclos de foco e pausas</span>
+            </div>
+          </div>
+          <div class="pomo-badge-fill">Iniciar &rsaquo;</div>
+        </div>
+
+        <!-- Card Clássico Embaixo -->
+        <div class="mock-card">
+          <div class="mock-carafe">
+            <img src="../assets/focus/v60.webp" alt="V60">
+          </div>
+          <div class="mock-dur">
+            <span style="font-size:12px;color:var(--muted)">−5</span>
+            <span class="mock-dur-val">25 min</span>
+            <span style="font-size:12px;color:var(--muted)">+5</span>
+          </div>
+          <div class="mock-field">No que você vai focar?</div>
+          <div style="display:flex;gap:6px;width:100%">
+            <div class="mock-field" style="flex:1">Estudo</div>
+            <div class="mock-field" style="flex:1">Total (rígido)</div>
+          </div>
+          <button class="mock-btn">Preparar café</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- TESTE 2: Ícone Circular (50%) + Pílula Iniciar -->
+  <div class="concept-card">
+    <div class="concept-title">B2 · Ícone Circular Marrom + Pílula "Iniciar ›"</div>
+    <div class="concept-desc">O relógio fica dentro de um círculo perfeito marrom com traço branco, dando uma linguagem mais arredondada e fluida.</div>
+    <div class="phone">
+      <div class="phone-screen">
+        <div class="mock-nav">
+          <span class="mock-title">Foco</span>
+        </div>
+
+        <!-- Botão B2 -->
+        <div class="pomo-btn-b">
+          <div class="pomo-b-left">
+            <div class="pomo-ic-b2">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+            </div>
+            <div class="pomo-b-titles">
+              <b>Modo Pomodoro</b>
+              <span>Ciclos de foco e pausas</span>
+            </div>
+          </div>
+          <div class="pomo-badge-fill">Iniciar &rsaquo;</div>
+        </div>
+
+        <!-- Card Clássico Embaixo -->
+        <div class="mock-card">
+          <div class="mock-carafe">
+            <img src="../assets/focus/v60.webp" alt="V60">
+          </div>
+          <div class="mock-dur">
+            <span style="font-size:12px;color:var(--muted)">−5</span>
+            <span class="mock-dur-val">25 min</span>
+            <span style="font-size:12px;color:var(--muted)">+5</span>
+          </div>
+          <div class="mock-field">No que você vai focar?</div>
+          <div style="display:flex;gap:6px;width:100%">
+            <div class="mock-field" style="flex:1">Estudo</div>
+            <div class="mock-field" style="flex:1">Total (rígido)</div>
+          </div>
+          <button class="mock-btn">Preparar café</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- TESTE 3: Ícone com Seta Simples na Direita (Super Clean) -->
+  <div class="concept-card">
+    <div class="concept-title">B3 · Ícone Invertido + Seta Simples (Mais Leve)</div>
+    <div class="concept-desc">Ícone marrom com relógio branco, mas sem a pílula "Iniciar" na direita — apenas uma seta marrom elegante, deixando o card ainda mais limpo.</div>
+    <div class="phone">
+      <div class="phone-screen">
+        <div class="mock-nav">
+          <span class="mock-title">Foco</span>
+        </div>
+
+        <!-- Botão B3 -->
+        <div class="pomo-btn-b">
+          <div class="pomo-b-left">
+            <div class="pomo-ic-b3">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+            </div>
+            <div class="pomo-b-titles">
+              <b>Modo Pomodoro</b>
+              <span>Ciclos de foco e pausas</span>
+            </div>
+          </div>
+          <div class="pomo-arrow-simple">&rsaquo;</div>
+        </div>
+
+        <!-- Card Clássico Embaixo -->
+        <div class="mock-card">
+          <div class="mock-carafe">
+            <img src="../assets/focus/v60.webp" alt="V60">
+          </div>
+          <div class="mock-dur">
+            <span style="font-size:12px;color:var(--muted)">−5</span>
+            <span class="mock-dur-val">25 min</span>
+            <span style="font-size:12px;color:var(--muted)">+5</span>
+          </div>
+          <div class="mock-field">No que você vai focar?</div>
+          <div style="display:flex;gap:6px;width:100%">
+            <div class="mock-field" style="flex:1">Estudo</div>
+            <div class="mock-field" style="flex:1">Total (rígido)</div>
+          </div>
+          <button class="mock-btn">Preparar café</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+</body>
+</html>

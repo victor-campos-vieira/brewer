@@ -462,11 +462,16 @@ export function focusBuilderHTML(inHome){
   var cur=effTaskId();
   var opts=undone.map(function(t){return '<option value="'+t.id+'"'+(t.id===cur?' selected':'')+'>'+esc(t.text)+'</option>'}).join('')+'<option value="__other"'+(cur===''?' selected':'')+'>Outra coisa / Foco livre</option>';
   var kd=S.draft.kind==='parcial'?'parcial':'total';
-  var pomoBtn='<button class="pomo-launch-btn" data-act="pomo-sheet">'+
-    IC_CLOCK+
-    '<span>Modo Pomodoro</span>'+
-    '<span class="pomo-launch-tag">Ciclos &amp; Pausas</span>'+
-  '</button>';
+  var pomoBtn='<div class="pomo-btn-b2" data-act="pomo-sheet" role="button" tabindex="0">'+
+    '<div class="pomo-b2-left">'+
+      '<div class="pomo-b2-icon">'+IC_CLOCK+'</div>'+
+      '<div class="pomo-b2-titles">'+
+        '<b>Modo Pomodoro</b>'+
+        '<span>Ciclos de foco e pausas</span>'+
+      '</div>'+
+    '</div>'+
+    '<div class="pomo-b2-badge">Iniciar &rsaquo;</div>'+
+  '</div>';
 
   return pomoBtn+
     '<div class="'+(inHome?'forest-card':'')+'">'+
