@@ -1,17 +1,18 @@
 import { $, mmss, uid, today, addDays, toMin, nowMin, fmtShort, mondayOf } from './utils.js';
 import { S, UI, SH, resetState, save, L, cmp, findTask, normTask, setDone, planned, setPlan, archiveFocus, currentGoal, updateTheme, screenStatusHTML, CUP_ASSETS, cupMeta, addCup, cupFallback, heroFallbackHTML, holdScreen, releaseLock, setAmbience, alertUser, playZenSound, toast, openSheet, closeSheet } from './state.js';
 import { gcCfg, gcResetToken, gcRun, gcDiag, gcDisconnect, gcToggleCal, gcReloadCals, mdSync, mdFile, confirmInbox, ignoreInbox } from './sync.js';
-import { renderHoje, prioSheet } from './views/hoje.js';
+import { renderHoje, prioSheet, moodSheet } from './views/hoje.js';
 import { suggestionsFor, placeSuggestion, plannerSheet, blockSheet, PRESETS, dayChips, routineSheet, renderAgenda } from './views/agenda.js';
 import { prioChips, applyPhrase, startVoice, readForm, taskSheet, inboxSheet, renderTarefas } from './views/tarefas.js';
-import { AWAY_ASK_MS, breakFocus, completeFocus, endPartial, checkReturn, answerReturn, pauseFocus, resumeFocus, effCat, effTaskId, openRitual, beginFocus, startFocus, updateDur, setKindUI, renderFoco, startPomodoro, startNextPomoCycle, finishPomodoroEarly, pomodoroSheetHTML, updatePomoSummary } from './views/foco.js';
+import { AWAY_ASK_MS, breakFocus, completeFocus, endPartial, checkReturn, answerReturn, pauseFocus, resumeFocus, effCat, effTaskId, openRitual, beginFocus, startFocus, updateDur, setKindUI, renderFoco, startPomodoro, startNextPomoCycle, finishPomodoroEarly, pomodoroSheetHTML, updatePomoSummary, focusTaskSheet, focusConfigSheet } from './views/foco.js';
 import { WX, WY, startGate, selectFeel, start10m, gateStay, gateOpenApp, gateConfig, gateBtnText, startWait, logUrge, finishWait, renderVontade } from './views/vontade.js';
-import { renderRevisao } from './views/revisao.js';
+import { renderRevisao, settingsSheet } from './views/revisao.js';
 import { renderColecao } from './views/colecao.js';
 import { requestNotifyPermission, notifyBreakDone, subscribeWebPush, unsubscribeWebPush, sendTestPush } from './notifications.js';
 import { recordMorningActivity, scheduleSmartSync } from './smart-push.js';
 import { primeFocusAudio, updateMediaSession, startFocusMedia, stopFocusMedia } from './media.js';
 import { renderJornada, simSession, testAdd, testRem, testSkip, testJump, testClear } from './views/jornada.js';
+import { bindBrewDial, bindSwipeTriageDeck, triggerCheckRipple, initLivingAtmosphere, initPausaFluidCanvas, initFocusVesselCanvas, updateFocusVesselState, bindHoldToBrew, MOOD_META, MOOD_ORDER, resolveCafeMood, playTactileTick, playSoftChime } from './interactions.js';
 
 /* ---------- navegação ---------- */
 export var TABS=['hoje','agenda','tarefas','foco','vontade','revisao','colecao','jornada'];
@@ -27,6 +28,13 @@ export function checkGateParam(){
       return true;
     }
     var sp=new URLSearchParams(window.location.search||'');
+    var directTab=sp.get('tab');
+    if(directTab&&TABS.indexOf(directTab)>-1){
+      S.tab=directTab;
+      if(directTab!=='vontade')S.wait=null;
+      save();
+      return true;
+    }
     var hash=window.location.hash||'';
     var g=null;
     for(var pair of sp.entries()){
@@ -54,7 +62,7 @@ export function checkGateParam(){
 }
 export function go(tab){
   var f=S.focus;
-  if(f&&f.mode==='failed')archiveFocus();
+  if(f&&(f.mode==='failed'||(f.mode==='done'&&tab!=='foco')))archiveFocus();
   if(tab==='vontade'&&(!S.wait||S.wait.phase==='result'||(S.wait.phase==='gate'&&Date.now()>=S.wait.end)))startGate('Instagram');
   else if(tab!=='vontade'&&S.wait&&S.wait.phase==='gate')S.wait=null;
   S.tab=tab;save();render();
@@ -64,19 +72,65 @@ export function go(tab){
 export function render(){
   document.documentElement.classList.remove('gate-lock');
   if(TABS.indexOf(S.tab)<0)S.tab='hoje';
+  document.body.dataset.tab=S.tab;
   TABS.forEach(function(t){$('#tab-'+t).hidden=(t!==S.tab)});
   document.body.classList.toggle('tab-vontade', S.tab === 'vontade');
   document.body.classList.toggle('tab-colecao-active', S.tab === 'colecao');
-  document.body.classList.toggle('focus-running', S.tab === 'foco' && !!(S.focus && (S.focus.mode === 'focus' || S.focus.mode === 'break' || S.focus.mode === 'pomo-ready')));
+  document.body.classList.toggle('focus-running', S.tab === 'foco' && !!(UI.pre || (S.focus && (S.focus.mode === 'focus' || S.focus.mode === 'break' || S.focus.mode === 'pomo-ready'))));
   document.querySelectorAll('.bar button').forEach(function(b){b.setAttribute('aria-current',b.dataset.tab===(['colecao','jornada','foco'].indexOf(S.tab)>-1?'hoje':S.tab)?'page':'false')});
   updateTheme();
+  var moodKey=resolveCafeMood(S.cafeMood);
+  document.body.dataset.mood=moodKey;
+  var moodIsDark=!!(MOOD_META[moodKey]&&MOOD_META[moodKey].dark);
+  document.body.classList.toggle('v2-dark',moodIsDark);
+  initLivingAtmosphere();
   ({hoje:renderHoje,agenda:renderAgenda,tarefas:renderTarefas,foco:renderFoco,vontade:renderVontade,revisao:renderRevisao,colecao:renderColecao,jornada:renderJornada})[S.tab]();
   renderRun();
   updateLive();
+  initPausaFluidCanvas(function(){
+    var s0=S.wait;
+    if(!s0||s0.phase!=='gate')return {elapsedMs:0,pct:0};
+    var now0=Date.now(),rem0=Math.max(0,s0.end-now0);
+    var elap0=Math.max(0,now0-(s0.start||(s0.end-s0.total*1000)));
+    return {elapsedMs:elap0,pct:Math.max(0,Math.min(1,1-rem0/(s0.total*1000)))};
+  });
+  initFocusVesselCanvas(function(){
+    var f0=S.focus;
+    var th=UI.studioBg||'crema';
+    if(['crema','ambar','noturno'].indexOf(th)<0)th='crema';
+    if(UI.pre&&!f0)return {isPre:true,pct:0,paused:false,theme:th};
+    if(!f0||f0.mode!=='focus')return {isPre:false,pct:0.25,paused:false,theme:th};
+    var now0=Date.now(),rem0=f0.pausedAt?f0.endTime-f0.pausedAt:f0.endTime-now0;
+    var elap0=Math.max(0,(f0.total*1000)-rem0);
+    return {isPre:false,pct:Math.max(0,Math.min(1,elap0/(f0.total*1000))),paused:!!f0.pausedAt,theme:th};
+  });
+  bindHoldToBrew(function(){
+    primeFocusAudio(UI.amb);
+    clearTimeout(UI.preTimer);
+    beginFocus();
+  });
+  bindBrewDial(
+    function(){return {mins:S.draft.mins,kind:S.draft.kind}},
+    function(newMins){S.draft.mins=newMins;save()}
+  );
+  bindSwipeTriageDeck({
+    onConfirm:function(ibId){var ic=S.inbox.find(function(x){return x.id===ibId});if(ic){confirmInbox(ic);save();render();toast('Confirmada em Pendentes.')}},
+    onIgnore:function(ibId){var ii=S.inbox.find(function(x){return x.id===ibId});if(ii){ignoreInbox(ii);save();render();toast('Ignorada.')}},
+    onToday:function(ibId){
+      var it=S.inbox.find(function(x){return x.id===ibId});
+      if(!it)return;
+      var before=S.tasks.length;
+      confirmInbox(it);
+      var added=S.tasks.length>before?S.tasks[S.tasks.length-1]:null;
+      if(added&&planned(today()).length<3){setPlan(added,true);toast('Confirmada e colocada nas 3 de Hoje!')}
+      else toast('Confirmada em Pendentes (3 de Hoje já completas).');
+      save();render();
+    }
+  });
 }
 export function renderRun(){
   var f=S.focus,el=$('#runpill');
-  if(f&&f.mode==='focus'&&S.tab!=='foco'){
+  if(f&&f.mode==='focus'&&S.tab!=='foco'&&S.tab!=='vontade'){
     el.innerHTML='<button data-act="tab" data-tab="foco">Foco em andamento: <b id="runTime">'+mmss(f.endTime-Date.now())+'</b></button>';
   }else el.innerHTML='';
 }
@@ -99,19 +153,40 @@ export function updateLive(){
   var now=Date.now(),f=S.focus,s=S.wait,title='Brewer';
   var navLocked=!!((S.tab==='vontade'&&s&&s.phase==='gate'&&now<s.end)||(S.tab==='foco'&&(UI.pre||(f&&f.mode==='focus'))));
   document.body.classList[navLocked?'add':'remove']('gate-lock');
-  document.body.classList.toggle('focus-running', S.tab === 'foco' && !!(f && (f.mode === 'focus' || f.mode === 'break' || f.mode === 'pomo-ready')));
+  document.body.classList.toggle('focus-running', S.tab === 'foco' && !!(UI.pre || (f && (f.mode === 'focus' || f.mode === 'break' || f.mode === 'pomo-ready'))));
   if(f&&(f.mode==='focus'||f.mode==='break')){
     var rem=f.pausedAt?f.endTime-f.pausedAt:f.endTime-now;
+    var elap=Math.max(0,(f.total*1000)-rem);
+    var pctF=Math.max(0,Math.min(1,elap/(f.total*1000)));
     var ft=$('#focusTime');if(ft)ft.textContent=mmss(rem);
-    var b=$('#focusBar');if(b)b.style.width=Math.max(0,Math.min(100,(1-rem/(f.total*1000))*100))+'%';
+    var fe=$('#focusElapsed');if(fe)fe.textContent='- '+mmss(elap);
+    var b=$('#focusBar');if(b)b.style.width=(pctF*100)+'%';
+    var ra=$('#focusRingArc');
+    if(ra){var cR=2*Math.PI*96;ra.setAttribute('stroke-dashoffset',(cR*(1-pctF)).toFixed(1))}
+    var rd=$('#focusRingDot');
+    if(rd){var ang=(pctF*360-90)*(Math.PI/180);rd.style.transform='translate('+(114+96*Math.cos(ang)).toFixed(1)+'px,'+(114+96*Math.sin(ang)).toFixed(1)+'px)'}
+    var lb=$('#liveBeansEarned');
+    if(lb&&f.mode==='focus'){
+      var mTot=Math.max(1,Math.round(f.total/60));
+      var expB=f.kind==='parcial'?Math.max(1,Math.floor(mTot/2)):mTot;
+      var curB=Math.min(expB,Math.floor(expB*pctF));
+      lb.textContent='+'+curB+'g / '+expB+'g'+(f.kind==='total'?' + bônus':'');
+    }
+    var fst=$('#focusStageTxt');
+    if(fst&&f.mode==='focus'){
+      fst.textContent=pctF<0.20?'Pré-infusão · Bloom':pctF<0.85?'Extração em fluxo':'Finalizando crema';
+    }
+    updateFocusVesselState({pct:pctF,paused:!!f.pausedAt,isPre:false});
     var rt=$('#runTime');if(rt)rt.textContent=mmss(rem);
     title=(f.pausedAt?'Pausa · ':'')+mmss(rem)+' · Brewer';
     updateMediaSession(f);
   }
   if(s&&s.phase==='gate'){
     var grem=Math.max(0,s.end-now);
+    var gpct=Math.max(0,Math.min(1,1-grem/(s.total*1000)));
     var wt=$('#waitTime');if(wt)wt.textContent=mmss(grem);
-    var gb=$('#gateBar');if(gb)gb.style.width=Math.max(0,Math.min(100,(1-grem/(s.total*1000))*100))+'%';
+    var gb=$('#gateBar');if(gb)gb.style.width=(gpct*100)+'%';
+    var gra=$('#gateRingArc');if(gra){var cG=Math.round(2*Math.PI*86);gra.setAttribute('stroke-dashoffset',String(Math.round(cG*(1-gpct))))}
     var gbl=$('#breathLabel');if(gbl){var ge=Math.max(0,now-(s.start||(s.end-s.total*1000)))%10000;gbl.textContent=ge<4000?'Inspira':'Solta'}
     var gob=$('#gateOpenBtn');
     if(gob){
@@ -128,6 +203,8 @@ export function updateLive(){
   }
   document.title=title;
 }
+if(!window.__brewerAppInit){
+window.__brewerAppInit=true;
 setInterval(function(){
   var now=Date.now(),ch=false,f=S.focus,gap=now-lastTick;lastTick=now;
   if(f&&f.mode==='focus'&&f.kind!=='parcial'&&!f.pausedAt&&!f.hiddenAt&&gap>AWAY_ASK_MS&&!document.hidden){f.hiddenAt=now-gap;save()}
@@ -206,7 +283,57 @@ document.addEventListener('click',function(e){
   var el=e.target.closest('[data-act]');if(!el)return;
   var a=el.dataset.act,id=el.dataset.id,t,k;
   switch(a){
-    case 'tab':go(el.dataset.tab);break;
+    case 'tab':closeSheet();if(el.dataset.sub)UI.agView=el.dataset.sub;if(el.dataset.rev)UI.revTab=el.dataset.rev;go(el.dataset.tab);break;
+    case 'draft-mode':
+      S.draft.mode=(el.dataset.v==='pomo'?'pomo':'unico');
+      save();playTactileTick(600,0.015,0.04);render();
+      break;
+    case 'pomo-quick':
+      var pq=el.dataset.v,dpq=S.draft.pomo=S.draft.pomo||{focusMins:25,breakMins:5,longBreakMins:15,cycles:4,kind:'total'};
+      dpq.preset=pq;
+      if(pq==='espresso'){dpq.focusMins=20;dpq.breakMins=4;dpq.longBreakMins=15;dpq.cycles=4}
+      else if(pq==='chemex'){dpq.focusMins=50;dpq.breakMins=10;dpq.longBreakMins=20;dpq.cycles=4}
+      else{dpq.focusMins=25;dpq.breakMins=5;dpq.longBreakMins=15;dpq.cycles=4}
+      save();playTactileTick(620,0.015,0.04);render();
+      break;
+    case 'next-skip':
+      UI.nextSkip=(UI.nextSkip||0)+1;
+      playTactileTick(520,0.014,0.035);render();
+      break;
+    case 'rev-tab':
+      UI.revTab=(el.dataset.v==='diario'?'diario':'ritmo');
+      playTactileTick(560,0.014,0.035);render();
+      break;
+    case 'settings-sheet':settingsSheet();break;
+    case 'toggle-streaks':
+      S.hideStreaks=!S.hideStreaks;
+      save();playTactileTick(540,0.014,0.035);render();settingsSheet();
+      break;
+    case 'gap-focus':
+      var gd0=Math.max(5,Math.min(120,+el.dataset.dur||25));
+      S.draft.mins=gd0;S.draft.mode='unico';save();
+      var gtid=effTaskId(),gtk=gtid?findTask(gtid):null;
+      openRitual({mins:gd0,kind:S.draft.kind,taskId:gtid,label:gtk?gtk.text:(S.draft.customLabel||'Janela livre'),cat:effCat()||'Sem categoria',src:'agenda'});
+      break;
+    case 'mood-sheet':moodSheet();break;
+    case 'set-mood':
+      var mv0=el.dataset.v;
+      if(mv0==='auto'){S.cafeMood='';}
+      else if(MOOD_META[mv0]){S.cafeMood=mv0;}
+      var effM=resolveCafeMood(S.cafeMood);
+      S.darkMode=!!MOOD_META[effM].dark;save();playTactileTick(640,0.016,0.04);render();moodSheet();
+      break;
+    case 'cycle-mood':
+      var curM=resolveCafeMood(S.cafeMood);
+      var nextM=MOOD_ORDER[(MOOD_ORDER.indexOf(curM)+1)%MOOD_ORDER.length];
+      S.cafeMood=nextM;S.darkMode=!!MOOD_META[nextM].dark;save();playTactileTick(640,0.016,0.04);render();
+      toast('Luz da cafeteria: '+MOOD_META[nextM].label);
+      break;
+    case 'focus-config-sheet':focusConfigSheet();break;
+    case 'scroll-drawer':
+      var dr=$('#hojeDayDrawer');if(dr)dr.scrollIntoView({behavior:'smooth',block:'start'});
+      break;
+    case 'theme-mode-toggle':S.darkMode=!S.darkMode;S.cafeMood=S.darkMode?'torrefacao':'manha';save();updateTheme();render();break;
     case 'prio-sheet':prioSheet();break;
     case 'notify-enable':requestNotifyPermission();break;
     case 'push-connect':var psi=$('#pushServerInput');subscribeWebPush(psi?psi.value.trim():'');break;
@@ -229,8 +356,8 @@ document.addEventListener('click',function(e){
       }, 300);
       break;
     case 'toggle-lock-audio':S.lockScreenAudio=S.lockScreenAudio===false?true:false;save();render();break;
-    case 'toggle':t=findTask(id);if(t){setDone(t,!t.done);save();render()}break;
-    case 'toggle-sh':t=findTask(id);if(t){setDone(t,!t.done);save();prioSheet();render()}break;
+    case 'toggle':t=findTask(id);if(t){var nextD=!t.done;if(nextD)triggerCheckRipple(el);setDone(t,nextD);save();render()}break;
+    case 'toggle-sh':t=findTask(id);if(t){var nextD2=!t.done;if(nextD2)triggerCheckRipple(el);setDone(t,nextD2);save();prioSheet();render()}break;
     case 'plan':t=findTask(id);if(t){if(setPlan(t,t.plan!==today())){save();render()}}break;
     case 'plan-sh':t=findTask(id);if(t){if(setPlan(t,t.plan!==today())){save();prioSheet();render()}}break;
     case 'pick':UI.pick=!UI.pick;render();break;
@@ -249,7 +376,12 @@ document.addEventListener('click',function(e){
       if(wantToday)t.plan=today();else if(was)t.plan='';
       if(!SH.id)S.tasks.push(t);
       save();closeSheet();render();break;
-    case 'task-del':S.tasks=S.tasks.filter(function(x){return x.id!==id});save();closeSheet();render();break;
+    case 'task-del':
+      if(confirm('Excluir esta tarefa permanentemente?')){
+        S.tasks=S.tasks.filter(function(x){return x.id!==id});
+        save();closeSheet();render();
+      }
+      break;
     case 'task-focus':closeSheet();S.draft.taskId=id;S.draft.cat='';save();go('foco');break;
     case 'sh-prio':SH.prio=+el.dataset.v;$('#fPrio').innerHTML=prioChips(SH.prio);break;
     case 'sheet-close':closeSheet();break;
@@ -258,6 +390,16 @@ document.addEventListener('click',function(e){
     case 'voice':startVoice();break;
     case 'phrase-fill':var ph=$('#fPhrase');applyPhrase(ph?ph.value:'');break;
     case 'ib-confirm':var ic=S.inbox.find(function(x){return x.id===id});if(ic){confirmInbox(ic);save();render();toast('Confirmada. Ela está em Projetos, Pendentes.')}break;
+    case 'ib-today':
+      var it0=S.inbox.find(function(x){return x.id===id});
+      if(it0){
+        var b0=S.tasks.length;confirmInbox(it0);
+        var ad0=S.tasks.length>b0?S.tasks[S.tasks.length-1]:null;
+        if(ad0&&planned(today()).length<3){setPlan(ad0,true);toast('Confirmada e colocada nas 3 de Hoje!')}
+        else toast('Confirmada em Pendentes (limite de 3 em Hoje).');
+        save();render();
+      }
+      break;
     case 'ib-edit':inboxSheet(id);break;
     case 'ib-ignore':var ii=S.inbox.find(function(x){return x.id===id});if(ii){ignoreInbox(ii);save();closeSheet();render();toast('Ignorada. Dá para restaurar em "Ver ignoradas".')}break;
     case 'ib-ign-toggle':UI.showIgn=!UI.showIgn;render();break;
@@ -283,11 +425,28 @@ document.addEventListener('click',function(e){
     case 'focus-task':closeSheet();S.draft.taskId=id;S.draft.cat='';save();go('hoje');break;
     case 'dur-minus':S.draft.mins=Math.max(5,(S.draft.mins<5?5:Math.round(S.draft.mins/5)*5)-5);save();updateDur();break;
     case 'dur-plus':S.draft.mins=Math.min(720,(S.draft.mins<5?0:Math.round(S.draft.mins/5)*5)+5);save();updateDur();break;
+    case 'dur-set':S.draft.mins=Math.max(5,Math.min(240,+el.dataset.v||25));save();updateDur();break;
     case 'dur-test':S.draft.mins=0.1667;save();updateDur();break;
-    case 'kind-set':S.draft.kind=el.dataset.v==='parcial'?'parcial':'total';save();setKindUI();break;
+    case 'rev-mood':L().mood=(L().mood===el.dataset.v?'':el.dataset.v);playTactileTick(580,0.015,0.04);save();updateTheme();render();break;
+    case 'rev-save':
+      var lgS=L(),fw=$('#fWin'),fn=$('#fNext');
+      if(fw)lgS.win=fw.value.trim();
+      if(fn)lgS.next=fn.value.trim();
+      playSoftChime();save();updateTheme();render();
+      toast('Fechamento do dia salvo!');
+      break;
+    case 'focus-goal-set':S.focusGoal=+el.dataset.v||15;save();updateTheme();render();if(!$('#sheetBack').hidden)settingsSheet();toast('Meta diária ajustada para '+S.focusGoal+' min.');break;
+    case 'kind-set':S.draft.kind=el.dataset.v==='parcial'?'parcial':'total';if(S.draft.pomo)S.draft.pomo.kind=S.draft.kind;save();setKindUI();render();break;
+    case 'focus-pick-sheet':focusTaskSheet();break;
+    case 'focus-pick-id':
+      var scl=$('#sheetCustomLabel');if(scl)S.draft.customLabel=scl.value.trim();
+      S.draft.taskId=id||'__other';S.draft.cat='';save();closeSheet();render();break;
+    case 'focus-pick-save':
+      var scl2=$('#sheetCustomLabel');if(scl2&&scl2.value.trim()){S.draft.customLabel=scl2.value.trim();S.draft.taskId='__other'}
+      save();closeSheet();render();break;
     case 'start-focus':
       var cl2=$('#customLabel'),tid=effTaskId(),tk=tid?findTask(tid):null;
-      openRitual({mins:S.draft.mins,kind:S.draft.kind,taskId:tid,label:tk?tk.text:((cl2&&cl2.value.trim())||'Foco livre'),cat:effCat()||'Sem categoria',src:'manual'});break;
+      openRitual({mins:S.draft.mins,kind:S.draft.kind,taskId:tid,label:tk?tk.text:((cl2&&cl2.value.trim())||S.draft.customLabel||'Foco livre'),cat:effCat()||'Sem categoria',src:'manual'});break;
     case 'pomo-sheet':openSheet('Modo Pomodoro',pomodoroSheetHTML());break;
     case 'pomo-kind':
       var pk=el.dataset.v;
@@ -296,7 +455,7 @@ document.addEventListener('click',function(e){
       document.querySelectorAll('[data-act="pomo-kind"]').forEach(function(b){
         b.setAttribute('aria-pressed',b.dataset.v===dpk.kind);
       });
-      updatePomoSummary();save();break;
+      updatePomoSummary();save();render();break;
     case 'pomo-preset':
       var pr=el.dataset.v,dp=S.draft.pomo=S.draft.pomo||{cycles:4};
       dp.preset=pr;
@@ -304,7 +463,7 @@ document.addEventListener('click',function(e){
       else if(pr==='chemex'){dp.focusMins=50;dp.breakMins=10;dp.longBreakMins=20;dp.cycles=4}
       else{dp.focusMins=25;dp.breakMins=5;dp.longBreakMins=15;dp.cycles=4}
       document.querySelectorAll('.pomo-chip').forEach(function(c){c.classList.toggle('active',c.dataset.v===pr)});
-      updatePomoSummary();save();break;
+      updatePomoSummary();save();render();break;
     case 'pomo-step':
       var fld=el.dataset.f,delta=+el.dataset.d;
       var dp2=S.draft.pomo=S.draft.pomo||{focusMins:25,breakMins:5,longBreakMins:15,cycles:4};
@@ -314,7 +473,8 @@ document.addEventListener('click',function(e){
       else if(fld==='breakMins')dp2.breakMins=Math.min(15,Math.max(2,(dp2.breakMins||5)+delta));
       else if(fld==='longBreakMins')dp2.longBreakMins=Math.min(30,Math.max(5,(dp2.longBreakMins||15)+delta));
       else if(fld==='cycles')dp2.cycles=Math.min(8,Math.max(1,(dp2.cycles||4)+delta));
-      updatePomoSummary();save();break;
+      playTactileTick(540+(delta>0?60:-60),0.014,0.036);
+      updatePomoSummary();save();render();break;
     case 'start-pomo-session':startPomodoro();break;
     case 'pomo-start-next':
     case 'pomo-skip-break':startNextPomoCycle();break;
@@ -339,6 +499,7 @@ document.addEventListener('click',function(e){
     case 'gc-toggle-cal':gcToggleCal(id,false);break;
     case 'gc-toggle-md':gcToggleCal(id,true);break;
     case 'gc-reload-cals':gcReloadCals();break;
+    case 'studio-bg':UI.studioBg=el.dataset.v||'crema';updateFocusVesselState({theme:UI.studioBg});render();break;
     case 'give-up':UI.giveUp=true;render();break;
     case 'stop-focus':UI.giveUp=false;breakFocus('gaveup');break;
     case 'pause':pauseFocus();break;
@@ -366,14 +527,17 @@ document.addEventListener('click',function(e){
       var first=S.tasks.filter(function(x){return !x.done}).sort(function(a,b){return ((b.plan===today())-(a.plan===today()))||cmp(a,b)})[0];
       L().resisted++;logUrge(S.wait?S.wait.feel:'','redirect');S.wait=null;releaseLock();
       startFocus(2,{taskId:first?first.id:'',starter:true,label:'Só 2 minutos'});break;
-    case 'wait-back':S.wait=null;save();go('foco');break;
+    case 'wait-back':S.wait=null;save();go(S.focus&&S.focus.mode==='focus'?'foco':'hoje');break;
     /* agenda */
     case 'ag-view':UI.agView=el.dataset.v;render();break;
     case 'day-prev':UI.agDay=addDays(UI.agDay||today(),-1);render();break;
     case 'day-next':UI.agDay=addDays(UI.agDay||today(),1);render();break;
+    case 'day-pick':UI.agDay=el.dataset.k||null;render();break;
     case 'day-today':UI.agDay=null;render();break;
     case 'r-open':
-      k=el.dataset.k||today();UI.open[k+'|'+el.dataset.r]=!UI.open[k+'|'+el.dataset.r];
+      k=el.dataset.k||today();
+      if(!el.dataset.r){UI.open[k]=!UI.open[k];render();break}
+      UI.open[k+'|'+el.dataset.r]=!UI.open[k+'|'+el.dataset.r];
       if(S.tab==='hoje'&&el.textContent.indexOf('Abrir rotina')>-1)UI.open[k+'|'+el.dataset.r]=true;
       render();break;
     case 'step':
@@ -382,7 +546,7 @@ document.addEventListener('click',function(e){
       S.rdone[rk]=arr;save();render();break;
     case 'auto-plan':
     case 'auto-plan-k':plannerSheet(a==='auto-plan'?today():(UI.agDay||today()));break;
-    case 'block-new':blockSheet(UI.agDay||today());break;
+    case 'block-new':blockSheet(UI.agDay||today(),el.dataset.start||'',el.dataset.end||'');break;
     case 'block-save':
       var st=$('#bStart').value,en=$('#bEnd').value,tk=$('#bTask').value,tt=($('#bTitle').value||'').trim();
       if(!tt&&tk){var tobj=findTask(tk);if(tobj)tt=tobj.text}
@@ -425,8 +589,8 @@ document.addEventListener('click',function(e){
     case 'rev-view':UI.revView=el.dataset.v;render();break;
     case 'home-sub':UI.homeSub=el.dataset.v;render();break;
     /* jogo */
-    case 'cat':S.draft.cat=el.dataset.v;save();render();break;
-    case 'cat-new':var cn=(prompt('Nome da nova categoria:')||'').trim();if(cn){if(S.cats.indexOf(cn)<0)S.cats.push(cn);S.draft.cat=cn;save();render()}break;
+    case 'cat':S.draft.cat=el.dataset.v;save();render();if(!$('#sheetBack').hidden)focusConfigSheet();break;
+    case 'cat-new':var cn=(prompt('Nome da nova categoria:')||'').trim();if(cn){if(S.cats.indexOf(cn)<0)S.cats.push(cn);S.draft.cat=cn;save();render();if(!$('#sheetBack').hidden)focusConfigSheet()}break;
     case 'cat-range':UI.catRange=+el.dataset.v;render();break;
     case 'col-view':UI.colView=el.dataset.v;render();break;
     case 'col-back':go('hoje');break;
@@ -447,6 +611,23 @@ document.addEventListener('click',function(e){
     case 't-clearb':S.cups=S.cups.filter(function(b){return !b.sim});S.sessions=S.sessions.filter(function(s){return !s.sim});save();render();break;
     case 't-reset':if(confirm('Apagar todos os dados do Brewer neste navegador?')){resetState();save();render()}break;
   }
+});
+document.addEventListener('submit',function(e){
+  var form=e.target&&e.target.closest?e.target.closest('form[data-quick-form]'):null;
+  if(!form)return;
+  e.preventDefault();
+  var inp=form.querySelector('.qif-input');
+  var text=(inp&&inp.value||'').trim();
+  if(!text){toast('Escreva a tarefa antes de adicionar.');return}
+  var fk=form.dataset.quickForm;
+  var kind=(fk==='faculdade')?'faculdade':'pessoal';
+  var t=normTask({id:uid(),text:text,done:false,doneAt:'',due:'',prio:2,plan:'',spent:0,cat:'',kind:kind,createdAt:Date.now()});
+  S.tasks.push(t);
+  UI.nextSkip=0;
+  playSoftChime();
+  save();
+  render();
+  toast('Tarefa adicionada!');
 });
 document.addEventListener('keydown',function(e){
   if(e.key==='Escape'&&!$('#sheetBack').hidden&&!UI.asking){closeSheet();return}
@@ -508,3 +689,4 @@ render();
 checkReturn();
 recordMorningActivity();
 scheduleSmartSync();
+}

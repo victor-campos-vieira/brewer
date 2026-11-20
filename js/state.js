@@ -4,7 +4,7 @@ import { setAmbienceMedia, stopAmbienceMedia } from './media.js';
 export var KEY='brewer.v1';
 
 /* ---------- estado ---------- */
-export var UI={agDay:null,agView:'dia',revView:'hoje',showDone:false,pick:false,open:{},colView:'cafe',giveUp:false,catRange:7,asking:false,tkKind:'pessoal',tkP:'pend',tkF:'new',mdCfg:false,mdBusy:false,mdErr:'',showIgn:false,listening:false,pre:null,preTimer:0,sg:[],sgDay:'',dismissed:{},hideSug:'',amb:'off',homeSub:'prio'};
+export var UI={agDay:null,agView:'dia',revView:'hoje',revTab:'ritmo',nextSkip:0,showDone:false,pick:false,open:{},colView:'cafe',giveUp:false,catRange:7,asking:false,tkKind:'pessoal',tkP:'pend',tkF:'new',mdCfg:false,mdBusy:false,mdErr:'',showIgn:false,listening:false,pre:null,preTimer:0,sg:[],sgDay:'',dismissed:{},hideSug:'',amb:'off',homeSub:'prio'};
 export var SH={};
 export function setSH(val){SH=val}
 
@@ -54,6 +54,39 @@ export function addCafeFocus(mins, beans){
   S.cafe.focusMins = (S.cafe.focusMins || 0) + mins;
 }
 
+/* Goal Gradient (Efeito IKEA): calcula dinamicamente o próximo item real mais próximo de desbloquear na Cafeteria */
+export function nextCafeUnlock(){
+  var beans=(S.cafe&&S.cafe.beans)||0;
+  var cat=(typeof window!=='undefined'&&window.CAFE_V2&&window.CAFE_V2.sprites)?window.CAFE_V2.sprites:null;
+  if(!cat)return {key:'v60',nm:'Hario V60',price:45,img:'assets/cafe/v2/metodo_v60.png',beans:beans,missing:Math.max(0,45-beans),pct:Math.min(100,Math.round((beans/45)*100)),ready:beans>=45};
+  var owned={};
+  ((S.cafe&&S.cafe.placed)||[]).forEach(function(it){if(it&&it.key)owned[it.key]=1});
+  ((S.cafe&&S.cafe.inventory)||[]).forEach(function(it){if(it&&it.key)owned[it.key]=1;else if(typeof it==='string')owned[it]=1});
+  var list=[];
+  Object.keys(cat).forEach(function(k){
+    var sp=cat[k];
+    if(sp&&typeof sp.price==='number'&&!owned[k])list.push({key:k,nm:sp.nm,price:sp.price,img:'assets/cafe/v2/'+sp.src});
+  });
+  list.sort(function(a,b){return a.price-b.price});
+  if(!list.length)return {key:'',nm:'Cafeteria completa',price:0,img:'assets/cafe/iso/cena_lv1.png',beans:beans,missing:0,pct:100,ready:false};
+  /* Escolhe o primeiro item que o usuário ainda precisa conquistar — ou o melhor já desbloqueável */
+  var target=list.find(function(it){return it.price>beans})||list[list.length-1];
+  var unlockable=list.filter(function(it){return it.price<=beans});
+  var best=unlockable.length?unlockable[unlockable.length-1]:target;
+  var chosen=unlockable.length?best:target;
+  return {
+    key:chosen.key,
+    nm:chosen.nm,
+    price:chosen.price,
+    img:chosen.img,
+    beans:beans,
+    missing:Math.max(0,chosen.price-beans),
+    pct:Math.min(100,Math.round((beans/Math.max(1,chosen.price))*100)),
+    ready:beans>=chosen.price,
+    canBuyCount:unlockable.length
+  };
+}
+
 export function fresh(){return {v:3,tasks:[],blocks:{},routines:[],rdone:{},log:{},urges:[],focus:null,wait:null,draft:{taskId:'',mins:25,kind:'total',cupModel:null,pomo:{preset:'classic',focusMins:25,breakMins:5,longBreakMins:15,cycles:4}},tab:'hoje',cups:[],unlocked:[],goal:240,goalStart:'',weekly1:true,testWeeks:0,keepAwake:true,interruptions:[],integrations:{googleCalendar:{status:'off'}},forceModel:null,testMode:false,sessions:[],sessMig:false,estLog:[],inbox:[],moodle:{baseUrl:'',token:'',ignored:{},confirmed:{},lastSync:0,lastResult:null},cats:['Estudo','Trabalho','Projeto pessoal','Saúde','Casa','Outro'],gateShortcut:'Liberar Instagram',cafe:defaultCafeState(0)}}
 
 /* tarefa: campos novos sem remover nenhum dos antigos */
@@ -88,6 +121,14 @@ export function load(){
   if(!s.draft.pomo)s.draft.pomo={preset:'classic',focusMins:25,breakMins:5,longBreakMins:15,cycles:4};
   if(s.focus&&s.focus.mode!=='focus'&&s.focus.mode!=='break'&&s.focus.mode!=='pomo-ready'){s.lastFocus=s.focus;s.focus=null}
   if(!s.sessMig){(s.cups||[]).forEach(function(c){s.sessions.push({id:'m'+c.id,d:c.d,t0:0,t1:0,mins:c.mins||0,mode:'total',ok:!!c.ok,cupId:c.id,model:c.model,cat:c.cat||'',label:c.label||'',taskId:'',src:'manual',blockId:'',ext:'',approx:true,sim:!!c.sim})});s.sessMig=true}
+  /* Hidrata S.log com sessões passadas para o Heatmap e Sequência automática v2 */
+  s.log=s.log||{};
+  (s.sessions||[]).forEach(function(x){
+    if(x&&x.ok&&x.d&&x.mins>0){
+      if(!s.log[x.d])s.log[x.d]={focus:0,resisted:0,gave:0,screen:null,win:'',next:'',cats:{},gateCount:0};
+      if(!s.log[x.d].focus)s.log[x.d].focus=0;
+    }
+  });
   var mo=s.moodle;if(!mo.ignored)mo.ignored={};if(!mo.confirmed)mo.confirmed={};
   if(!s.cafe){
     var histMins=0;
@@ -193,12 +234,23 @@ export function stepsDone(k,r){
   return d.filter(function(id){return r.steps.some(function(s){return s.id===id})});
 }
 export function routineRow(r,k){
-  var done=stepsDone(k,r),open=!!UI.open[k+'|'+r.id];
-  var steps=open?'<ul class="steps">'+r.steps.map(function(st){
+  var done=stepsDone(k,r),open=!!UI.open[k+'|'+r.id],tot=r.steps.length||1,pct=Math.round(done.length/tot*100);
+  var chev='<svg class="tiimo-chev'+(open?' open':'')+'" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="6 9 12 15 18 9"/></svg>';
+  var steps=open?'<ul class="steps tiimo-steps-v2">'+r.steps.map(function(st){
     var d=done.indexOf(st.id)>-1;
     return '<li class="'+(d?'done':'')+'"><button class="check sm" data-act="step" data-k="'+k+'" data-r="'+r.id+'" data-s="'+st.id+'" aria-label="'+(d?'Desmarcar':'Marcar')+': '+esc(st.text)+'">'+CHECK+'</button><span>'+esc(st.text)+'</span></li>';
   }).join('')+'</ul>':'';
-  return '<button class="rhead" data-act="r-open" data-k="'+k+'" data-r="'+r.id+'" aria-expanded="'+open+'"><span><b>'+esc(r.name)+'</b><small class="muted">'+r.time+', '+(r.dur||30)+' min</small></span><span class="muted">'+done.length+'/'+r.steps.length+'</span></button>'+steps;
+  return '<div class="tiimo-routine-v2">'
+    +'<button class="rhead tiimo-rhead" data-act="r-open" data-k="'+k+'" data-r="'+r.id+'" aria-expanded="'+open+'">'
+      +'<div class="tr-top"><b>'+esc(r.name)+'</b><span class="tr-dur">'+(r.dur||30)+'m</span></div>'
+      +'<div class="tr-sub">'
+        +'<div class="tr-track"><span class="tr-fill" style="width:'+pct+'%"></span></div>'
+        +'<span class="tr-cnt">'+done.length+'/'+r.steps.length+'</span>'
+        +chev
+      +'</div>'
+    +'</button>'
+    +steps
+  +'</div>';
 }
 export function routinePct(k){
   var wd=parseKey(k).getDay(),tot=0,dn=0;
@@ -228,23 +280,30 @@ export function weekIdx(k){
 export function goalAt(w){var g=S.goal;for(var i=0;i<w;i++)g=Math.max(30,Math.min(g-1,Math.round(g*0.99)));return g}
 export function currentGoal(k){return goalAt(weekIdx(k))}
 export function nextGoal(){return S.weekly1?goalAt(weekIdx()+1):S.goal}
-export function qualifies(k){var l=S.log[k];return !!l&&l.screen!=null&&l.screen<=(l.goal||currentGoal(k))}
+export function qualifies(k){
+  var l=S.log[k];
+  if(!l)return false;
+  var minF=S.focusGoal||15;
+  if((l.focus||0)>=minF||l.sim||l.win||l.next||l.mood)return true;
+  if(l.screen!=null&&l.screen<=(l.goal||currentGoal(k)))return true;
+  return false;
+}
 export function streakInfo(){
-  var t=today(),has=S.log[t]&&S.log[t].screen!=null,end=has?t:addDays(t,-1),n=0,d=end;
+  var t=today(),has=qualifies(t),end=has?t:addDays(t,-1),n=0,d=end;
   while(qualifies(d)&&n<4000){n++;d=addDays(d,-1)}
   var best=0,run=0,prev=null;
   Object.keys(S.log).filter(qualifies).sort().forEach(function(k){run=(prev&&addDays(prev,1)===k)?run+1:1;if(run>best)best=run;prev=k});
-  return {n:n,end:end,best:Math.max(best,n)};
+  return {n:n,end:end,best:Math.max(best,n),todayDone:has};
 }
 export function updateTheme(){
   document.body.setAttribute('data-theme',phaseIdx(streakInfo().n));
+  document.body.classList.toggle('v2-dark',!!S.darkMode);
   try{var m=document.querySelector('meta[name="theme-color"]'),c=getComputedStyle(document.body).getPropertyValue('--bg').trim();if(m&&c)m.setAttribute('content',c)}catch(e){}
 }
 export function screenStatusHTML(){
-  var lg=L(),s=streakInfo(),g=fmtHM(lg.goal||currentGoal());
-  if(lg.screen==null)return '<p><b>Hoje ainda não conta.</b></p><p class="muted small">Registre o tempo e fique dentro de '+fmtHM(currentGoal())+' (meta desta semana) para somar um dia. Sequência atual: '+pl(s.n,'dia','dias')+'.</p>';
-  if(qualifies(today()))return '<p><b>Dentro da meta. Dia contado.</b></p><p class="muted small">'+fmtHM(lg.screen)+' de '+g+'. Sequência: '+pl(s.n,'dia','dias')+'.</p>';
-  return '<p><b>Acima da meta. A sequência zerou.</b></p><p class="muted small">'+fmtHM(lg.screen)+' de '+g+'. Amanhã você recomeça do dia 1.</p>';
+  var lg=L(),s=streakInfo(),minF=S.focusGoal||15;
+  if(qualifies(today()))return '<p><b>Ritual de hoje concluído.</b></p><p class="muted small">'+fmtHM(lg.focus||0)+' focados hoje. Sequência ativa: '+pl(s.n,'dia','dias')+'.</p>';
+  return '<p><b>Complete '+minF+' min de foco ou feche a revisão para somar o dia.</b></p><p class="muted small">Progresso hoje: '+fmtHM(lg.focus||0)+' de '+minF+'m. Sequência atual: '+pl(s.n,'dia','dias')+'.</p>';
 }
 export function phaseBadge(){
   var s=streakInfo(),i=phaseIdx(s.n),p=PHASES[i],nx=PHASES[i+1];

@@ -170,8 +170,8 @@ export async function showNotification(title, options) {
 
   options = options || {};
   var defaultOpts = {
-    icon: './icons/icon-192.png',
-    badge: './icons/icon-192.png',
+    icon: 'icons/icon-192.png',
+    badge: 'icons/icon-192.png',
     tag: options.tag || 'brewer-general',
     renotify: true,
     vibrate: [200, 100, 200, 100, 200],
@@ -258,7 +258,7 @@ export function pushSettingsHTML() {
     '<div style="margin-top:18px;padding-top:14px;border-top:1px solid var(--line)">' +
       '<div style="display:flex;align-items:center;justify-content:space-between">' +
         '<div>' +
-          '<b>Versão do App: v34</b>' +
+          '<b>Versão do App: v43</b>' +
           '<p class="muted small" style="margin-top:2px">Limpa o cache do iPhone e recarrega os arquivos mais recentes.</p>' +
         '</div>' +
         '<button class="btn quiet small" data-act="pwa-force-update">Limpar Cache</button>' +

@@ -17,6 +17,7 @@ var gcTok=null,gcExp=0,gcGisP=null;
 
 export function gcResetToken(clearExp){gcTok=null;if(clearExp)gcExp=0}
 export function gcCfg(){
+  if(!S.integrations)S.integrations={};
   var c=S.integrations.googleCalendar||(S.integrations.googleCalendar={});
   if(c.push===undefined)c.push=true;
   if(!c.pendingDelete)c.pendingDelete=[];
@@ -24,7 +25,8 @@ export function gcCfg(){
   if(!c.extraCals)c.extraCals=[];
   if(!c.selectedCals)c.selectedCals=['primary'];
   if(!c.availableCals)c.availableCals=[];
-  c.clientId=c.clientId||GC.clientId||'';
+  var defCid=(GC&&GC.clientId)||'559268929436-vvaltsjeietmvhh2uor7m51asmn4u8a9.apps.googleusercontent.com';
+  c.clientId=c.clientId||defCid;
   if(!c.status||(c.status==='off'&&c.clientId))c.status=c.clientId?'ready':'off';
   return c;
 }
@@ -313,9 +315,7 @@ export function gcalPanelHTML(){
 }
 export function gcMoodleReady(){var c=gcCfg();return !!(c.clientId&&c.moodleCals&&c.moodleCals.length)}
 export function moodlePanelHTML(){
-  var m=S.moodle,h='<div class="gc" style="margin-top:14px"><h3>Importar Tarefas Externas</h3><p class="small muted" style="margin-top:6px">Atividades de calendários da Agenda ou arquivos .ics chegam aqui em <b>Entrada</b> e só viram tarefas depois que você confirmar.</p><div class="row"><button class="btn small" data-act="md-ics">Importar arquivo (.ics)</button>';
-  if(gcMoodleReady())h+='<button class="btn quiet small" data-act="gc-sync"'+(UI.gcBusy?' disabled':'')+'>'+(UI.gcBusy?'Sincronizando...':'Atualizar pela Agenda')+'</button>';
-  h+='</div><input type="file" id="mdIcs" accept=".ics,text/calendar,text/plain" style="position:absolute;width:1px;height:1px;opacity:0;pointer-events:none" tabindex="-1">';
+  var m=S.moodle,h='<div class="gc" style="margin-top:14px"><h3>Importar Tarefas Externas</h3><p class="small muted" style="margin-top:6px">Atividades de calendários da Agenda ou arquivos .ics chegam aqui em <b>Entrada</b> e só viram tarefas depois que você confirmar.</p><div class="row"><button class="btn small" data-act="md-ics">Importar arquivo (.ics)</button><button class="btn quiet small" data-act="gc-sync"'+(UI.gcBusy?' disabled':'')+'>'+(UI.gcBusy?'Sincronizando...':'Atualizar pela Agenda')+'</button></div><input type="file" id="mdIcs" accept=".ics,text/calendar,text/plain" style="position:absolute;width:1px;height:1px;opacity:0;pointer-events:none" tabindex="-1">';
   if(m.lastResult)h+='<p class="small muted" style="margin-top:8px">Última importação: '+new Date(m.lastSync).toLocaleString('pt-BR',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'})+' ('+m.lastResult.added+' novas, '+m.lastResult.updated+' já em Entrada, '+m.lastResult.skipped+' já tratadas ou antigas).</p>';
   if(UI.mdErr)h+='<div class="nudge small" style="margin-top:10px">'+esc(UI.mdErr)+'</div>';
   return h+'</div>';

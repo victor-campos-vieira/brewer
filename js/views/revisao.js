@@ -1,65 +1,216 @@
-import { $, esc, pl, today, parseKey, addDays, fmtHM, DAYL, DAYN, lastDays, seg } from '../utils.js';
-import { S, UI, L, planned, routinePct, currentGoal, qualifies, screenStatusHTML } from '../state.js';
-import { catHTML, catBars, interruptLine } from './foco.js';
+import { $, esc, today, parseKey, addDays, mondayOf, fmtHM, DAYL, lastDays, IC_PLAY, IC_FLAME } from '../utils.js';
+import { S, UI, L, qualifies, streakInfo, phaseIdx, PHASES, openSheet } from '../state.js';
+import { catTotals, interruptLine } from './foco.js';
 import { pushSettingsHTML } from '../notifications.js';
 
-/* ---------- REVISÃO ---------- */
-export function bars(days,vals,max,fmt,sun){
-  return days.map(function(k,i){
-    var v=vals[i];var w=(v!=null&&max)?Math.round(v/max*100):0;
-    return '<div class="brow"><span class="bday">'+DAYL[parseKey(k).getDay()]+'</span><span class="btrack"><span class="bfill'+(sun?' sun':'')+'" style="width:'+w+'%"></span></span><span class="bval">'+(v==null?'sem dado':fmt(v))+'</span></div>';
+/* ---------- RESUMO v3 (2 Sub-abas Limpas: Ritmo | Diário + Engrenagem de Configs + stoic. Opt-Out de Ofensiva) ---------- */
+const IC_GEAR='<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>';
+
+export function settingsSheet(){
+  var minF=S.focusGoal||25;
+  var goalBtns=[15,25,45,60].map(function(g){
+    return '<button class="chip" data-act="focus-goal-set" data-v="'+g+'" aria-pressed="'+(minF===g)+'">'+g+' min/dia</button>';
   }).join('');
+  var showStreak=!S.hideStreaks;
+  openSheet('Preferências & Alertas',
+    '<p class="flabel" style="margin-top:2px">Meta diária leve de foco</p>'+
+    '<div class="chips" style="margin-top:6px">'+goalBtns+'</div>'+
+    '<div class="stoic-streak-opt">'+
+      '<div><b>Mostrar contador de ofensiva</b><span>Inspirado no stoic.: você pode ocultar se dias seguidos te geram ansiedade.</span></div>'+
+      '<button class="chip" data-act="toggle-streaks" aria-pressed="'+showStreak+'">'+(showStreak?'Ativo':'Oculto')+'</button>'+
+    '</div>'+
+    '<div style="margin-top:14px">'+pushSettingsHTML()+'</div>'+
+    '<div class="stack" style="margin-top:16px">'+
+      '<button class="btn quiet block" data-act="tab" data-tab="jornada">Ver Jornada de Torras &amp; Modo Teste</button>'+
+      '<button class="btn block" data-act="sheet-close">Fechar</button>'+
+    '</div>'
+  );
 }
-export function renderRevisao(){
-  var el=$('#tab-revisao'),k=today();
-  var head='<h1>Revisão</h1>'+seg('rev-view',UI.revView,[['hoje','Fechar o Dia'],['semana','Gráficos (7d)'],['raiox','Raio-X']]);
-  if(UI.revView==='hoje'){
-    var lg=L(k),pl3=planned(k),doneToday=S.tasks.filter(function(t){return t.doneAt===k}).length;
-    var sh=lg.screen!=null?Math.floor(lg.screen/60):'',sm=lg.screen!=null?lg.screen%60:'';
-    el.innerHTML=head+
-      '<div class="smart-card" style="margin-top:14px">'+
-        '<div class="smart-info"><span class="smart-eyebrow">Resumo de hoje</span><b>'+fmtHM(lg.focus)+' de foco · '+pl(doneToday,'tarefa feita','tarefas feitas')+(pl3.length?' ('+pl3.filter(function(t){return t.done}).length+'/'+pl3.length+' prioridades)':'')+'</b></div>'+
-      '</div>'+
-      '<label class="flabel" for="fScreenH" style="margin-top:16px">Tempo de tela de hoje</label>'+
-      '<div class="pair"><input class="field field-sm" id="fScreenH" data-f="screenH" type="number" inputmode="numeric" min="0" max="23" placeholder="horas" value="'+sh+'" aria-label="Horas"><input class="field field-sm" id="fScreenM" data-f="screenM" type="number" inputmode="numeric" min="0" max="59" placeholder="minutos" value="'+sm+'" aria-label="Minutos"></div>'+
-      '<div id="screenStatus" class="nudge" style="margin-top:10px;padding:10px 14px">'+screenStatusHTML()+'</div>'+
-      '<label class="flabel" for="fWin" style="margin-top:14px">Maior vitória do dia</label><input class="field field-sm" id="fWin" data-f="win" maxlength="120" value="'+esc(lg.win)+'" placeholder="Até uma coisa pequena conta">'+
-      '<label class="flabel" for="fNext" style="margin-top:14px">Amanhã eu começo por</label><input class="field field-sm" id="fNext" data-f="next" maxlength="120" value="'+esc(lg.next)+'" placeholder="Uma ação concreta para começar o dia">'+
-      pushSettingsHTML();
-    return;
-  }
-  var days=lastDays(7),prev=lastDays(7,addDays(k,-7));
-  var focus=days.map(function(d){return L(d).focus});
-  var screen=days.map(function(d){var v=S.log[d]?S.log[d].screen:null;return v==null?null:v});
-  var maxF=Math.max.apply(null,focus.concat([1])),maxS=Math.max.apply(null,screen.map(function(v){return v||0}).concat([1]));
-  var sc=screen.filter(function(v){return v!=null}),psc=prev.map(function(d){var v=S.log[d]?S.log[d].screen:null;return v}).filter(function(v){return v!=null});
-  var avg=function(a){return a.reduce(function(x,y){return x+y},0)/a.length};
-  var tl=sc.length>=3?'Média de tela: '+fmtHM(avg(sc))+'/dia'+(psc.length>=3?' (sem. ant.: '+fmtHM(avg(psc))+')':''):'Registre 3 dias de tela para ver a média.';
-  var totF=focus.reduce(function(a,b){return a+b},0);
-  var best=focus.indexOf(Math.max.apply(null,focus));
-  var doneW=S.tasks.filter(function(t){return t.doneAt&&days.indexOf(t.doneAt)>-1}).length;
 
-  if(UI.revView==='semana'){
-    el.innerHTML=head+
-      '<div class="smart-card" style="margin-top:14px">'+
-        '<div class="smart-info"><span class="smart-eyebrow">Últimos 7 dias</span><b>'+fmtHM(totF)+' focado · '+pl(doneW,'tarefa','tarefas')+' · '+days.filter(qualifies).length+'/7 na meta</b><p class="muted small" style="margin-top:2px">'+tl+(totF?' · Melhor dia: '+DAYN[parseKey(days[best]).getDay()]:'')+'</p></div>'+
-      '</div>'+
-      '<p class="bcap" style="margin-top:16px">Foco por dia</p>'+bars(days,focus,maxF,function(v){return v?fmtHM(v):'0'},false)+
-      '<p class="bcap" style="margin-top:16px">Tela por dia</p>'+bars(days,screen,maxS,fmtHM,true);
-    return;
-  }
+/* BLOCO 1 DO RITMO: Cápsulas Semanais + Corte Diagonal (Gentler_Streak_iOS_52.png) */
+export function gentlerWeeklyCardHTML(k){
+  var days=lastDays(7);
+  var prevDays=[];
+  for(var i=13;i>=7;i--)prevDays.push(addDays(k,-i));
 
-  /* Raio-X: Categorias, Vontades e Meta da Semana */
+  var curVals=days.map(function(d){return L(d).focus||0});
+  var prevVals=prevDays.map(function(d){return L(d).focus||0});
+  var curTot=curVals.reduce(function(a,b){return a+b},0);
+  var prevTot=prevVals.reduce(function(a,b){return a+b},0);
+  var maxV=Math.max.apply(null,curVals.concat([30]));
+
+  var curSessions=S.sessions.filter(function(s){return days.indexOf(s.d)>-1}).length;
+  var prevSessions=S.sessions.filter(function(s){return prevDays.indexOf(s.d)>-1}).length;
+
+  var cols=days.map(function(d,idx){
+    var v=curVals[idx];
+    var hPct=v>0?Math.max(18,Math.round((v/maxV)*100)):0;
+    var isT=(d===k);
+    var caps='';
+    if(v>=45){
+      caps='<span class="gs-cap" style="height:'+Math.round(hPct*0.48)+'%"></span><span class="gs-cap" style="height:'+Math.round(hPct*0.48)+'%"></span>';
+    }else if(v>0){
+      caps='<span class="gs-cap" style="height:'+hPct+'%"></span>';
+    }else{
+      caps='<span class="gs-cap empty"></span>';
+    }
+    return '<div class="gs-col'+(isT?' is-today':'')+'">'+
+      '<div class="gs-bar-well">'+caps+'</div>'+
+      '<span class="gs-day-lbl">'+(isT?'Hoje':DAYL[parseKey(d).getDay()])+'</span>'+
+    '</div>';
+  }).join('');
+
+  var minF=S.focusGoal||25;
+  var goalPills=[15,25,45,60].map(function(g){
+    return '<button class="gs-goal-chip" data-act="focus-goal-set" data-v="'+g+'" aria-pressed="'+(minF===g)+'">'+g+'m</button>';
+  }).join('');
+
+  return '<section class="gentler-card-v3">'+
+    '<div class="gc3-top">'+
+      '<div><h2 class="gc3-orange-title">Esta Semana</h2><span class="gc3-sub">Meta leve: '+minF+' min/dia</span></div>'+
+      '<div class="gc3-goals" role="group" aria-label="Meta diária">'+goalPills+'</div>'+
+    '</div>'+
+    '<div class="gs-chart-grid">'+cols+'</div>'+
+    '<div class="gs-diagonal-split">'+
+      '<div class="gsd-left">'+
+        '<span class="gsd-kicker">Esta semana</span>'+
+        '<b class="gsd-big">'+fmtHM(curTot)+'</b>'+
+        '<span class="gsd-meta">'+curSessions+' '+(curSessions===1?'bloco':'blocos')+'</span>'+
+      '</div>'+
+      '<div class="gsd-right">'+
+        '<span class="gsd-kicker">Semana passada</span>'+
+        '<b class="gsd-big">'+fmtHM(prevTot)+'</b>'+
+        '<span class="gsd-meta">'+prevSessions+' '+(prevSessions===1?'bloco':'blocos')+'</span>'+
+      '</div>'+
+    '</div>'+
+  '</section>';
+}
+
+/* BLOCO 2 DO RITMO: Matriz Visual de 35 Dias (timespent_iOS_3.png) */
+export function heatmapHTML(){
+  var k=today(),curMon=mondayOf(k),startDay=addDays(curMon,-28);
+  var cells='',weekFocus=0;
+  for(var i=0;i<35;i++){
+    var d=addDays(startDay,i),lg=S.log[d],f=(lg&&lg.focus)||0,ok=qualifies(d);
+    if(i>=28)weekFocus+=f;
+    var lvl=f>=60?'lv-3':f>=25?'lv-2':(f>0||ok)?'lv-1':'lv-0';
+    var isT=(d===k)?' is-today':'';
+    cells+='<span class="hm-cell '+lvl+isT+'" title="'+d+': '+fmtHM(f)+'"></span>';
+  }
+  return '<section class="ts-heatmap-card" style="margin-top:12px">'+
+    '<div class="ts-hm-head">'+
+      '<div><span class="smart-eyebrow">Últimas 5 semanas</span><b>Matriz de Presença</b></div>'+
+      '<div class="ts-hm-total"><b>'+fmtHM(weekFocus)+'</b><span>Nesta semana</span></div>'+
+    '</div>'+
+    '<div class="ts-hm-body">'+
+      '<button class="ts-start-stamp" data-act="tab" data-tab="hoje" aria-label="Iniciar sessão de foco">'+
+        '<span class="ts-stamp-ring">INICIAR SESSÃO · FOCO ·</span>'+
+        '<span class="ts-stamp-play">'+IC_PLAY+'</span>'+
+      '</button>'+
+      '<div style="flex:1">'+
+        '<div class="ts-hm-weekdays"><span>S</span><span>T</span><span>Q</span><span>Q</span><span>S</span><span>S</span><span>D</span></div>'+
+        '<div class="ts-hm-grid">'+cells+'</div>'+
+      '</div>'+
+    '</div>'+
+  '</section>';
+}
+
+/* BLOCO 3 DO RITMO: Barra Proporcional Única de Atenção (How_We_Feel_iOS_265.png) */
+export function categorySpectrumCardHTML(){
+  var days=lastDays(UI.catRange||7);
+  var r=catTotals(days);
+  var palette=['#E8833A','#47A85C','#5C85E6','#D95B5B','#9673E8'];
+  var inner='';
+  if(!r.sum){
+    inner='<p class="muted small" style="margin-top:10px">Conclua blocos de foco para ver para onde foi sua atenção.</p>';
+  }else{
+    var segs=r.arr.map(function(x,idx){
+      var pct=Math.max(8,Math.round((x[1]/r.sum)*100));
+      return '<span class="hwf-seg" style="width:'+pct+'%;background:'+palette[idx%palette.length]+'"></span>';
+    }).join('');
+    var rows=r.arr.map(function(x,idx){
+      var pct=Math.round((x[1]/r.sum)*100);
+      var col=palette[idx%palette.length];
+      return '<div class="cat-spec-row">'+
+        '<span class="csr-dot" style="background:'+col+'"></span>'+
+        '<b class="csr-name">'+esc(x[0])+'</b>'+
+        '<span class="csr-val">'+fmtHM(x[1])+' · <b>'+pct+'%</b></span>'+
+      '</div>';
+    }).join('');
+    inner='<div class="hwf-master-bar" style="margin-top:12px">'+segs+'</div><div class="cat-spec-list">'+rows+'</div>';
+  }
+  return '<section class="bevel-ceramic-deck" style="margin-top:12px">'+
+    '<div class="bcd-coach-head"><b>Para onde foi sua atenção</b>'+
+      '<div class="vfd-status-chips">'+
+        '<button class="vfd-chip" data-act="cat-range" data-v="7" aria-pressed="'+((UI.catRange||7)===7)+'">7d</button>'+
+        '<button class="vfd-chip" data-act="cat-range" data-v="30" aria-pressed="'+(UI.catRange===30)+'">30d</button>'+
+      '</div>'+
+    '</div>'+
+    inner+
+    '<div style="margin-top:8px">'+interruptLine()+'</div>'+
+  '</section>';
+}
+
+/* SUB-ABA 2: DIÁRIO DA NOITE LIMPO (5_Minute_Journal_iOS_22.png + 5_Minute_Journal_iOS_53.png) */
+export var MOOD_STATES=['Disperso','Oscilante','Equilibrado','Focado','Imerso'];
+
+export function fiveMinJournalCardHTML(k,lg,s){
+  var moodChips=MOOD_STATES.map(function(m,idx){
+    return '<button type="button" class="fmj-mood-pill" data-act="rev-mood" data-v="'+esc(m)+'" aria-pressed="'+(lg.mood===m)+'">'+
+      '<span class="fmp-num">'+(idx+1)+'</span>'+esc(m)+
+    '</button>';
+  }).join('');
+
+  var closedToday=!!(lg.mood||lg.win||lg.next);
   var from=Date.now()-7*864e5;
-  var ur=S.urges.filter(function(u){return u.t>=from});
-  var sur=ur.filter(function(u){return u.res!=='gave'}).length,gav=ur.length-sur;
-  var cnt={},per={'manhã':0,'tarde':0,'noite':0};
-  ur.forEach(function(u){if(u.feel)cnt[u.feel]=(cnt[u.feel]||0)+1;var h=new Date(u.t).getHours();per[h<12?'manhã':h<18?'tarde':'noite']++});
-  var topFeel=Object.keys(cnt).sort(function(a,b){return cnt[b]-cnt[a]})[0];
-  var topPer=Object.keys(per).sort(function(a,b){return per[b]-per[a]})[0];
-  var urgeHtml=ur.length?'<p class="sumline">'+pl(ur.length,'vontade','vontades')+': resistiu '+sur+'x e cedeu '+gav+'x.</p>'+(topFeel?'<p class="sumline">Gatilho principal: '+esc(topFeel.toLowerCase())+' ('+topPer+').</p>':''):'<p class="sumline muted">Nenhuma vontade registrada nesta semana.</p>';
-  el.innerHTML=head+
-    '<div class="sec" style="margin-top:16px;padding-top:12px"><h2>Para onde foi o foco</h2>'+seg('cat-range',String(UI.catRange),[['7','7 dias'],['30','30 dias']])+catBars(lastDays(UI.catRange))+'</div>'+
-    '<div class="sec" style="margin-top:16px;padding-top:12px"><h2>Vontades &amp; Interrupções</h2><div style="margin-top:6px">'+urgeHtml+interruptLine()+'</div></div>'+
-    '<div class="sec" style="margin-top:16px;padding-top:12px"><h2>Meta inicial de tela</h2><div class="pair"><input class="field field-sm" id="fGoalH" data-f="goalH" type="number" inputmode="numeric" min="0" max="23" value="'+Math.floor(S.goal/60)+'" aria-label="Horas da meta"><input class="field field-sm" id="fGoalM" data-f="goalM" type="number" inputmode="numeric" min="0" max="59" value="'+(S.goal%60)+'" aria-label="Minutos da meta"></div><p class="small muted" style="margin-top:6px">Com 1% melhor por semana, a meta desta semana é '+fmtHM(currentGoal())+'.</p></div>';
+  var ur=S.urges.filter(function(u){return u.t>=from&&u.res!=='gave'}).length;
+  var streakMeta=(!S.hideStreaks&&s.n>0)?'Sequência: '+s.n+(s.n===1?' dia':' dias'):(ur?ur+' impulsos vencidos na semana':'');
+
+  return '<section class="fmj-parchment-card">'+
+    '<div class="fmj-head-row">'+
+      '<span class="fmj-top-pill'+(closedToday?' is-saved':'')+'">'+(closedToday?'Dia registrado &check;':'Fechamento da noite')+'</span>'+
+      (streakMeta?'<span class="fmj-urges-note">'+streakMeta+'</span>':'')+
+    '</div>'+
+    '<h2 class="fmj-serif-title">Como esteve sua presença hoje?</h2>'+
+    '<p class="fmj-sub">Toque no seu nível de presença hoje e feche o ciclo com calma antes de dormir.</p>'+
+    '<div class="mood-strip-v2" role="group" aria-label="Estado de presença do dia">'+moodChips+'</div>'+
+    '<label class="flabel" for="fWin" style="margin-top:16px">Uma vitória ou avanço de hoje</label>'+
+    '<input class="field field-sm fmj-input" id="fWin" data-f="win" maxlength="120" value="'+esc(lg.win)+'" placeholder="Até um pequeno avanço conta">'+
+    '<label class="flabel" for="fNext" style="margin-top:12px">Amanhã eu começo por</label>'+
+    '<input class="field field-sm fmj-input" id="fNext" data-f="next" maxlength="120" value="'+esc(lg.next)+'" placeholder="Uma ação concreta para abrir a manhã">'+
+    '<div class="stack" style="margin-top:16px">'+
+      '<button type="button" class="fmj-save-btn" data-act="rev-save">'+(closedToday?'Atualizar registro de hoje':'Salvar fechamento do dia')+'</button>'+
+    '</div>'+
+  '</section>';
+}
+
+export function renderRevisao(){
+  var el=$('#tab-revisao'),k=today(),lg=L(k),s=streakInfo(),p=PHASES[phaseIdx(s.n)];
+  var rTab=UI.revTab||'ritmo';
+
+  var streakPill=S.hideStreaks
+    ?''
+    :'<button class="glass-beans-pill" data-act="tab" data-tab="jornada" title="Jornada de Torra">'+IC_FLAME+' <b>'+s.n+'d</b></button>';
+
+  var body=(rTab==='diario')
+    ?fiveMinJournalCardHTML(k,lg,s)
+    :(gentlerWeeklyCardHTML(k)+heatmapHTML()+categorySpectrumCardHTML());
+
+  el.innerHTML=
+    '<div class="resumo-ceramic-studio">'+
+      '<header class="rcs-header">'+
+        '<div><h1 class="stb-greet">Resumo</h1><span class="stb-date">'+esc(p.name)+' &middot; '+(lg.focus||0)+'m hoje</span></div>'+
+        '<div class="stb-right">'+
+          streakPill+
+          '<button class="glass-chip-icon" data-act="settings-sheet" aria-label="Preferências e alertas" title="Preferências">'+IC_GEAR+'</button>'+
+        '</div>'+
+      '</header>'+
+
+      '<div class="ticktick-seg-bar" role="tablist" aria-label="Visão do Resumo">'+
+        '<button class="tt-seg-btn'+(rTab==='ritmo'?' active':'')+'" data-act="rev-tab" data-v="ritmo" role="tab" aria-selected="'+(rTab==='ritmo')+'">Ritmo</button>'+
+        '<button class="tt-seg-btn'+(rTab==='diario'?' active':'')+'" data-act="rev-tab" data-v="diario" role="tab" aria-selected="'+(rTab==='diario')+'">Diário</button>'+
+      '</div>'+
+
+      body+
+    '</div>';
 }

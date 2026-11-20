@@ -1,65 +1,224 @@
-import { $, esc, key, today, fmtShort, fmtHM, dueLabel, stripAcc, CHECK, STAR, MIC, seg } from '../utils.js';
-import { S, UI, SH, setSH, cmp, findTask, subjects, toast, openSheet } from '../state.js';
+import { $, esc, key, today, fmtShort, fmtHM, dueLabel, stripAcc, CHECK, STAR, MIC, IC_PLAY, IC_CAL, IC_TARGET, seg } from '../utils.js';
+import { S, UI, SH, setSH, cmp, findTask, subjects, toast, openSheet, planned } from '../state.js';
 import { moodlePanelHTML } from '../sync.js';
 
-/* ---------- TAREFAS: pessoais e faculdade ---------- */
+/* ---------- TAREFAS v2 (Things 3 Today Inset + Amie Pie-Progress Workspace Pods + Squircle Task Cards) ---------- */
 export var GN=['Atrasadas','Para hoje','Próximas','Sem prazo'];
 export function groupOf(t,k){if(t.due&&t.due<k)return 0;if(t.plan===k||t.due===k)return 1;if(t.due)return 2;return 3}
-export function taskRow(t,k){
-  var meta=[];
-  if(t.kind==='faculdade'&&t.subject)meta.push(t.subject);
-  if(t.prio===1)meta.push('Prioridade alta');
-  if(t.due)meta.push('Prazo: '+dueLabel(t.due)+(t.dueTime?' às '+t.dueTime:''));
-  if(t.est)meta.push(fmtHM(t.est)+' estimados');
-  if(t.spent)meta.push(t.spent+' min de foco');
-  if(t.done&&t.doneAt)meta.push('Concluída em '+fmtShort(t.doneAt));
-  if(t.done&&t.est&&t.spent)meta.push('estimado '+fmtHM(t.est)+', real '+fmtHM(t.spent));
-  return '<li class="task'+(t.done?' done':'')+'"><button class="check" data-act="toggle" data-id="'+t.id+'" aria-label="'+(t.done?'Desmarcar':'Marcar como feita')+': '+esc(t.text)+'">'+CHECK+'</button>'+
-    '<button class="ttext" data-act="task-edit" data-id="'+t.id+'">'+esc(t.text)+(meta.length?'<small class="muted">'+esc(meta.join(', '))+'</small>':'')+'</button>'+
-    (t.done?'':'<button class="star" data-act="plan" data-id="'+t.id+'" aria-pressed="'+(t.plan===k)+'" aria-label="'+(t.plan===k?'Tirar de hoje':'Fazer hoje')+': '+esc(t.text)+'">'+STAR+'</button>')+'</li>';
+
+/* Gráfico circular de progresso estilo Amie (Amie_iOS_89.png & Amie_iOS_157.png) */
+export function amiePieSVG(done,total,color){
+  var pct=total>0?Math.max(0.12,Math.min(1,done/total)):0.15;
+  var r=8,c=Math.round(2*Math.PI*r*10)/10;
+  var dash=Math.round(c*pct*10)/10;
+  return '<svg class="amie-pie-svg" width="22" height="22" viewBox="0 0 24 24" aria-hidden="true">'+
+    '<circle cx="12" cy="12" r="9.5" fill="none" stroke="'+color+'" stroke-opacity="0.24" stroke-width="2.2"/>'+
+    '<circle cx="12" cy="12" r="'+r+'" fill="none" stroke="'+color+'" stroke-width="4.2" stroke-linecap="round" stroke-dasharray="'+dash+' '+c+'" transform="rotate(-90 12 12)"/>'+
+  '</svg>';
 }
+
+export function taskRow(t,k){
+  var subParts=[];
+  if(t.kind==='faculdade'&&t.subject)subParts.push(t.subject);
+  else if(t.cat)subParts.push(t.cat);
+  else subParts.push(t.kind==='faculdade'?'Projeto':'Pessoal');
+  if(t.est)subParts.push(fmtHM(t.est));
+  if(t.spent)subParts.push(t.spent+'m focado');
+  if(t.done&&t.doneAt)subParts.push('Concluída '+fmtShort(t.doneAt));
+
+  var pCls=t.prio===1?'prio-1':t.prio===3?'prio-3':'prio-2';
+  var noteLine=(t.note&&!t.done)?'<span class="amie-note-line">'+esc(t.note)+'</span>':'';
+  var datePill='';
+  if(t.due){
+    var isLate=!t.done&&t.due<k;
+    var isTodayDue=t.due===k;
+    datePill='<span class="amie-date-pill'+(isLate?' is-late':isTodayDue?' is-today':'')+'">'+esc(dueLabel(t.due)+(t.dueTime?' '+t.dueTime:''))+'</span>';
+  }
+  var startInline=(!t.done)?'<button class="td-focus-mini" data-act="sg-focus" data-id="'+t.id+'" title="Focar nesta tarefa">'+IC_PLAY+'</button>':'';
+
+  return '<li class="amie-task-row'+(t.done?' done':'')+'">'+
+    '<button class="check squircle-check '+pCls+'" data-act="toggle" data-id="'+t.id+'" aria-label="'+(t.done?'Desmarcar':'Marcar como feita')+': '+esc(t.text)+'">'+CHECK+'</button>'+
+    '<button class="ttext amie-task-body" data-act="task-edit" data-id="'+t.id+'">'+
+      '<div class="atr-top-line">'+
+        '<b class="amie-task-title">'+esc(t.text)+'</b>'+
+        datePill+
+      '</div>'+
+      '<span class="things-project-sub">'+esc(subParts.join(' · '))+'</span>'+
+      noteLine+
+    '</button>'+
+    '<div class="td-right-acts">'+
+      startInline+
+      (t.done?'':'<button class="star td-star" data-act="plan" data-id="'+t.id+'" aria-pressed="'+(t.plan===k)+'" aria-label="'+(t.plan===k?'Tirar de hoje':'Fazer hoje')+': '+esc(t.text)+'">'+STAR+'</button>')+
+    '</div>'+
+  '</li>';
+}
+
 export function pendingList(kind,k){
   var openT=S.tasks.filter(function(t){return !t.done&&t.kind===kind}).sort(cmp);
-  if(!openT.length)return '';
-  var groups=[[],[],[],[]],html='';
+  /* Captura Instantânea em 1 linha estilo Linear Mobile (Linear_Mobile_iOS_24.png) */
+  var addRow='<form class="quick-inline-form tarefas-quick" data-quick-form="'+kind+'">'+
+    '<input class="qif-input" type="text" maxlength="90" placeholder="Adicionar rápido em '+(kind==='pessoal'?'Pessoais':'Projetos')+'...">'+
+    '<button type="submit" class="qif-submit" aria-label="Adicionar tarefa">+</button>'+
+  '</form>';
+  if(!openT.length)return '<div style="margin-top:12px">'+addRow+'</div><div class="tp-empty-state" style="margin-top:14px"><b>Nenhuma tarefa pendente aqui</b><p class="muted small">Digite acima e aperte Enter para tirar da cabeça em 2 segundos.</p></div>';
+  var groups=[[],[],[],[]],html='<div style="margin-top:10px">'+addRow+'</div>';
   openT.forEach(function(t){groups[groupOf(t,k)].push(t)});
-  groups.forEach(function(g,i){if(g.length)html+='<p class="gtitle">'+GN[i]+'</p><ul class="tasks">'+g.map(function(t){return taskRow(t,k)}).join('')+'</ul>'});
+  var pillStyles=['danger','sun','lavender','neutral'];
+  groups.forEach(function(g,i){
+    if(!g.length)return;
+    var gKey='tk_grp_'+kind+'_'+i;
+    var closed=!!UI.open[gKey];
+    html+='<div class="tiimo-group-sec" style="margin-top:16px">'+
+      '<div class="tiimo-pill-bar">'+
+        '<button class="tiimo-sec-pill '+pillStyles[i]+(closed?' closed':'')+'" data-act="r-open" data-k="'+gKey+'" data-r="">'+
+          '<span>'+GN[i].toUpperCase()+' ('+g.length+')</span>'+
+          '<svg class="tiimo-sec-chev" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>'+
+        '</button>'+
+      '</div>'+
+      (closed?'':'<ul class="tasks amie-task-list">'+g.map(function(t){return taskRow(t,k)}).join('')+'</ul>')+
+    '</div>';
+  });
   return html;
 }
+
 export function doneList(kind,k){
   var d=S.tasks.filter(function(t){return t.done&&t.kind===kind}).sort(function(a,b){return (b.doneTs||0)-(a.doneTs||0)});
-  return d.length?'<ul class="tasks" style="margin-top:18px">'+d.map(function(t){return taskRow(t,k)}).join('')+'</ul>':'';
+  return d.length?'<div class="amie-done-head"><span>'+d.length+' concluída'+(d.length>1?'s':'')+'</span></div><ul class="tasks amie-task-list">'+d.map(function(t){return taskRow(t,k)}).join('')+'</ul>':'';
 }
+
 export function inboxSort(a,b){var x=a.due||'9999',y=b.due||'9999';return x<y?-1:x>y?1:0}
 export function inboxCard(it){
-  var meta=[];if(it.subject)meta.push(esc(it.subject));
-  meta.push(it.due?'Entrega: '+fmtShort(it.due)+' ('+dueLabel(it.due)+')'+(it.dueTime?' às '+it.dueTime:''):'Sem prazo');
-  if(it.est)meta.push(fmtHM(it.est)+' estimados');
-  if(it.prio===1)meta.push('prioridade alta');
-  if(it.gone)meta.push('não apareceu na última sincronização');
-  return '<div class="icard"><b>'+esc(it.title)+'</b><p class="muted small" style="margin-top:2px">'+meta.join(', ')+'</p><div class="row" style="margin-top:12px"><button class="btn small" data-act="ib-confirm" data-id="'+it.id+'">Confirmar</button><button class="btn quiet small" data-act="ib-edit" data-id="'+it.id+'">Editar</button><button class="btn quiet small" data-act="ib-ignore" data-id="'+it.id+'">Ignorar</button></div></div>';
+  var subjTag=it.subject?'<span class="amie-subj-tag">'+esc(it.subject)+'</span>':'<span class="amie-subj-tag">Entrada</span>';
+  var duePill=it.due
+    ?'<span class="amie-date-pill is-today">'+esc(fmtShort(it.due)+' · '+dueLabel(it.due)+(it.dueTime?' '+it.dueTime:''))+'</span>'
+    :'<span class="amie-date-pill">Sem prazo</span>';
+  var extra=[];
+  if(it.est)extra.push(fmtHM(it.est)+' est.');
+  if(it.prio===1)extra.push('Prioridade Alta');
+  if(it.gone)extra.push('Ausente no último sync');
+  return '<div class="amie-triage-card">'+
+    '<div class="atc-top">'+subjTag+duePill+'</div>'+
+    '<b class="atc-title">'+esc(it.title)+'</b>'+
+    (extra.length?'<p class="atc-meta">'+esc(extra.join(' · '))+'</p>':'')+
+    '<div class="atc-actions">'+
+      '<button class="atc-btn primary" data-act="ib-confirm" data-id="'+it.id+'">&check; Confirmar em Pendentes</button>'+
+      '<button class="atc-btn" data-act="ib-edit" data-id="'+it.id+'">Editar</button>'+
+      '<button class="atc-btn ghost" data-act="ib-ignore" data-id="'+it.id+'">Ignorar</button>'+
+    '</div>'+
+  '</div>';
 }
+
 export function ignoredHTML(){
   var seen={},list=[];
   Object.keys(S.moodle.ignored).forEach(function(k){var it=S.moodle.ignored[k].item;if(it&&!seen[it.id]){seen[it.id]=1;list.push(it)}});
   if(!list.length)return '';
-  var h='<div class="row"><button class="ghost small" data-act="ib-ign-toggle">'+(UI.showIgn?'Esconder ignoradas':'Ver ignoradas ('+list.length+')')+'</button></div>';
-  if(UI.showIgn)h+=list.map(function(it){return '<div class="icard"><b>'+esc(it.title)+'</b><p class="muted small" style="margin-top:2px">'+(it.subject?esc(it.subject)+', ':'')+(it.due?'Entrega: '+fmtShort(it.due):'Sem prazo')+'</p><div class="row" style="margin-top:12px"><button class="btn quiet small" data-act="ib-restore" data-id="'+esc(it.id)+'">Restaurar em Entrada</button></div></div>'}).join('');
+  var h='<div class="row" style="margin-top:12px"><button class="ghost small" data-act="ib-ign-toggle">'+(UI.showIgn?'Esconder ignoradas':'Ver ignoradas ('+list.length+')')+'</button></div>';
+  if(UI.showIgn)h+=list.map(function(it){return '<div class="amie-triage-card"><b>'+esc(it.title)+'</b><p class="muted small" style="margin-top:2px">'+(it.subject?esc(it.subject)+', ':'')+(it.due?'Entrega: '+fmtShort(it.due):'Sem prazo')+'</p><div class="row" style="margin-top:10px"><button class="atc-btn" data-act="ib-restore" data-id="'+esc(it.id)+'">Restaurar em Entrada</button></div></div>'}).join('');
   return h;
 }
+
+export function swipeTriageDeckHTML(sorted){
+  if(!sorted.length)return '';
+  var top3=sorted.slice(0,3);
+  var cards=top3.map(function(it,idx){
+    var isTop=(idx===0);
+    var subjTag=it.subject?esc(it.subject):'Atividade da Entrada';
+    var dueTxt=it.due?(fmtShort(it.due)+' · '+dueLabel(it.due)+(it.dueTime?' '+it.dueTime:'')):'Sem prazo definido';
+    return '<div class="triage-swipe-card'+(isTop?' is-top':' is-behind-'+idx)+'" data-id="'+it.id+'">'+
+      '<div class="tsc-stamp confirm">CONFIRMAR</div>'+
+      '<div class="tsc-stamp ignore">IGNORAR</div>'+
+      '<div class="tsc-stamp today">FAZER HOJE</div>'+
+      '<div class="tsc-top">'+
+        '<span class="amie-subj-tag">'+subjTag+'</span>'+
+        '<span class="amie-date-pill is-today">'+esc(dueTxt)+'</span>'+
+      '</div>'+
+      '<h3 class="tsc-title">'+esc(it.title)+'</h3>'+
+      '<p class="tsc-sub">'+(it.est?fmtHM(it.est)+' estimados · ':'')+(idx===0?'Arraste para direita (Confirmar), esquerda (Ignorar) ou cima (Hoje)':'Próxima da fila')+'</p>'+
+    '</div>';
+  }).reverse().join('');
+
+  var cur=top3[0];
+  return '<section class="copilot-triage-stage">'+
+    '<div class="cts-head"><b>Triagem rápida ('+sorted.length+' na fila)</b><span>Arraste o cartão ou toque abaixo</span></div>'+
+    '<div class="triage-deck-wrap">'+cards+'</div>'+
+    '<div class="triage-quick-dock">'+
+      '<button class="tqd-btn ignore" data-act="ib-ignore" data-id="'+cur.id+'">&times; Ignorar</button>'+
+      '<button class="tqd-btn today" data-act="ib-today" data-id="'+cur.id+'">'+STAR+' Hoje</button>'+
+      '<button class="tqd-btn confirm" data-act="ib-confirm" data-id="'+cur.id+'">&check; Confirmar</button>'+
+    '</div>'+
+  '</section>';
+}
+
 export function renderTarefas(){
-  var k=today(),kind=UI.tkKind,sub=kind==='pessoal'?UI.tkP:UI.tkF,body='';
-  var s1=seg('tk-kind',kind,[['pessoal','Pessoais'],['faculdade','Projetos']]);
-  var s2=(kind==='pessoal'?seg('tk-sub',sub,[['pend','Pendentes'],['done','Concluídas']]):seg('tk-sub',sub,[['new','Entrada'+(S.inbox.length?' ('+S.inbox.length+')':'')],['pend','Pendentes'],['done','Concluídas']])).replace('class="seg"','class="seg" style="margin-top:10px"');
+  var k=today(),kind=UI.tkKind||'pessoal',sub=kind==='pessoal'?(UI.tkP||'pend'):(UI.tkF||'pend'),body='';
+  var pl3=planned(k),done3=pl3.filter(function(t){return t.done}).length;
+
+  var pOpen=S.tasks.filter(function(t){return !t.done&&t.kind==='pessoal'}).length;
+  var pDone=S.tasks.filter(function(t){return t.done&&t.kind==='pessoal'}).length;
+  var fOpen=S.tasks.filter(function(t){return !t.done&&t.kind==='faculdade'}).length;
+  var fDone=S.tasks.filter(function(t){return t.done&&t.kind==='faculdade'}).length;
+  var ibLen=S.inbox.length;
+
+  /* Header limpo estilo Things 3 + Anéis de Categorias estilo Copilot (Copilot_iOS_31.png) */
+  var header='<header class="things-hero-header">'+
+    '<div class="thh-top">'+
+      '<div class="thh-title-row">'+
+        '<span class="things-star-badge">'+STAR+'</span>'+
+        '<h1 class="v2-hero-greeting">Tarefas</h1>'+
+      '</div>'+
+      '<button class="things-magic-plus" data-act="task-new" aria-label="Nova tarefa">+</button>'+
+    '</div>'+
+
+    '<div class="amie-workspace-grid">'+
+      '<button class="amie-ws-pod'+(kind==='pessoal'?' active':'')+'" data-act="tk-kind" data-v="pessoal">'+
+        amiePieSVG(pDone,pOpen+pDone,'#34C759')+
+        '<div class="awp-txt"><b>Pessoais</b><span>'+pOpen+' abertas</span></div>'+
+      '</button>'+
+      '<button class="amie-ws-pod'+(kind==='faculdade'?' active':'')+'" data-act="tk-kind" data-v="faculdade">'+
+        amiePieSVG(fDone,fOpen+fDone,'#E8833A')+
+        '<div class="awp-txt"><b>Projetos</b><span>'+fOpen+' pend.'+(ibLen?' · <em class="awp-ib">+'+ibLen+'</em>':'')+'</span></div>'+
+      '</button>'+
+      '<button class="amie-ws-pod today-pod" data-act="prio-sheet">'+
+        amiePieSVG(done3,3,'#E5A93C')+
+        '<div class="awp-txt"><b>3 de Hoje</b><span>'+done3+'/3 feitas</span></div>'+
+      '</button>'+
+    '</div>'+
+  '</header>';
+
+  var todayInset=pl3.length
+    ?'<section class="things-today-inset">'+
+      '<div class="tti-head"><span>'+STAR+' Suas 3 prioridades de hoje ('+done3+'/'+pl3.length+')</span><button class="tti-edit" data-act="prio-sheet">Gerenciar</button></div>'+
+      pl3.map(function(t){
+        return '<div class="tti-row'+(t.done?' is-done':'')+'">'+
+          '<button class="check squircle-check sm" data-act="toggle" data-id="'+t.id+'">'+CHECK+'</button>'+
+          '<button class="tti-title" data-act="task-edit" data-id="'+t.id+'">'+esc(t.text)+'</button>'+
+          '<button class="tti-rem" data-act="plan" data-id="'+t.id+'" title="Tirar de hoje">Remover</button>'+
+        '</div>';
+      }).join('')+
+    '</section>'
+    :'';
+
+  var filterBar='<div class="ticktick-seg-bar" role="group">'+
+    (kind==='faculdade'?'<button class="tt-seg-btn'+(sub==='new'?' active':'')+'" data-act="tk-sub" data-v="new">Entrada '+(ibLen?'<span class="tt-badge alert">'+ibLen+'</span>':'<span class="tt-badge">0</span>')+'</button>':'')+
+    '<button class="tt-seg-btn'+(sub==='pend'?' active':'')+'" data-act="tk-sub" data-v="pend">Pendentes <span class="tt-badge">'+(kind==='pessoal'?pOpen:fOpen)+'</span></button>'+
+    '<button class="tt-seg-btn'+(sub==='done'?' active':'')+'" data-act="tk-sub" data-v="done">Concluídas <span class="tt-badge">'+(kind==='pessoal'?pDone:fDone)+'</span></button>'+
+  '</div>';
+
   if(sub==='new'){
-    body=moodlePanelHTML()+(S.inbox.length?S.inbox.slice().sort(inboxSort).map(inboxCard).join(''):'<p class="lead" style="margin-top:18px">Nenhuma atividade na Entrada. Importe da Agenda ou envie arquivos para ver o que chegou; nada vira tarefa sem a sua confirmação.</p>')+ignoredHTML();
+    var sortedIb=S.inbox.slice().sort(inboxSort);
+    body=moodlePanelHTML()+
+      (sortedIb.length
+        ?swipeTriageDeckHTML(sortedIb)+'<div class="amie-triage-stack">'+sortedIb.map(inboxCard).join('')+'</div>'
+        :'<div class="tp-empty-state" style="margin-top:16px"><b>Entrada zerada</b><p class="muted small">Importe arquivo .ics do Moodle ou atualize pela Agenda para triar novas atividades.</p></div>')+
+      ignoredHTML();
   }else if(sub==='pend'){
-    var l=pendingList(kind,k);
-    body='<div class="row"><button class="btn small" data-act="task-new">Nova tarefa</button></div>'+(l||'<p class="lead" style="margin-top:22px">'+(kind==='pessoal'?'Nenhuma tarefa aberta. Anote o que está na sua cabeça, assim ela para de ocupar espaço lá.':'Nenhuma tarefa pendente neste projeto. Confirme atividades em Entrada ou crie uma aqui.')+'</p>');
+    body=pendingList(kind,k);
   }else{
-    body=doneList(kind,k)||'<p class="lead" style="margin-top:22px">Nenhuma tarefa concluída ainda.</p>';
+    body=doneList(kind,k)||'<div class="tp-empty-state" style="margin-top:16px"><b>Nenhuma tarefa concluída ainda</b><p class="muted small">As tarefas finalizadas aparecerão aqui com seu histórico de tempo.</p></div>';
   }
-  $('#tab-tarefas').innerHTML='<h1>Tarefas</h1><p class="lead">Toque na estrela para pôr uma tarefa nas suas 3 de hoje.</p>'+s1+s2+body;
+
+  var fileInput='<input type="file" id="mdIcs" accept=".ics,text/calendar,text/plain" style="position:absolute;width:1px;height:1px;opacity:0;pointer-events:none" tabindex="-1">';
+  $('#tab-tarefas').innerHTML=header+todayInset+filterBar+body+fileInput;
 }
 
 /* ---------- formulários de tarefas e voz ---------- */
@@ -157,12 +316,14 @@ export function taskSheet(id,presetToday,kind){
   var t=id?findTask(id):null,tk=t?t.kind:(kind||UI.tkKind||'pessoal');
   setSH({kind:'task',id:id||'',prio:t?t.prio:2,tk:tk});
   var plan=t?(t.plan===today()):!!presetToday;
+  var pl3=planned(today());
+  var note3=(!plan&&pl3.length>=3)?' <small class="muted" style="color:var(--danger)">(limite de 3 atingido)</small>':'';
   openSheet(t?'Editar tarefa':'Nova tarefa',
     formFields({text:t?t.text:'',due:t?t.due:'',est:t?t.est:0,note:t?t.note:'',showCat:true,cat:t?t.cat:''})+
-    '<label class="check-row"><input type="checkbox" id="fToday"'+(plan?' checked':'')+'> Fazer hoje (conta nas suas 3)</label>'+
+    '<label class="check-row"><input type="checkbox" id="fToday"'+(plan?' checked':'')+'> Fazer hoje (conta nas suas 3)'+note3+'</label>'+
     (t&&t.url?'<p class="small" style="margin-top:12px"><a href="'+esc(t.url)+'" target="_blank" rel="noopener" style="color:var(--sea)">Abrir link de origem</a></p>':'')+
     '<div class="stack"><button class="btn block" data-act="task-save">Salvar</button>'+
-    (t?'<button class="btn quiet block" data-act="task-focus" data-id="'+t.id+'">Focar nisso agora</button><button class="btn quiet block danger" data-act="task-del" data-id="'+t.id+'">Excluir</button>':'')+
+    (t?'<button class="btn quiet block" data-act="task-focus" data-id="'+t.id+'">Focar nisso agora</button><button class="btn quiet block danger" data-act="task-del" data-id="'+t.id+'">Excluir tarefa</button>':'')+
     '<button class="btn quiet block" data-act="sheet-close">Cancelar</button></div>');
   try{document.activeElement.blur()}catch(e){}
 }

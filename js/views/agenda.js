@@ -1,4 +1,4 @@
-import { $, esc, pl, uid, today, parseKey, toMin, fromMin, nowMin, cap, fmtLong, fmtDur, ceil5, dueLabel, DAYL, DAYN, daysText, seg } from '../utils.js';
+import { $, esc, pl, uid, today, parseKey, addDays, mondayOf, toMin, fromMin, nowMin, cap, fmtLong, fmtDur, ceil5, dueLabel, DAYL, DAYN, daysText, IC_PLAY, seg } from '../utils.js';
 import { S, UI, SH, setSH, save, cmp, findTask, estStats, dayItems, routineRow, openSheet } from '../state.js';
 import { gcalHint, gcalPanelHTML } from '../sync.js';
 
@@ -80,13 +80,15 @@ export function sugCardHTML(){
 }
 
 /* ---------- formulários de blocos e rotinas ---------- */
-export function blockSheet(k){
-  var st=(k===today())?Math.min(22*60,Math.ceil((nowMin()+5)/15)*15):9*60;
+export function blockSheet(k,preStart,preEnd){
+  var st=preStart?toMin(preStart):((k===today())?Math.min(22*60,Math.ceil((nowMin()+5)/15)*15):9*60);
+  var en=preEnd?toMin(preEnd):Math.min(1439,st+45);
+  if(en<=st)en=Math.min(1439,st+45);
   var tasks=S.tasks.filter(function(t){return !t.done}).sort(cmp);
   setSH({kind:'block',k:k});
   openSheet('Novo bloco',
     '<label class="flabel" for="bTitle">Nome do bloco</label><input class="field" id="bTitle" maxlength="80" placeholder="Ex.: estudar inglês">'+
-    '<div class="pair"><div><label class="flabel" for="bStart">Início</label><input class="field" id="bStart" type="time" value="'+fromMin(st)+'"></div><div><label class="flabel" for="bEnd">Fim</label><input class="field" id="bEnd" type="time" value="'+fromMin(Math.min(1439,st+45))+'"></div></div>'+
+    '<div class="pair"><div><label class="flabel" for="bStart">Início</label><input class="field" id="bStart" type="time" value="'+fromMin(st)+'"></div><div><label class="flabel" for="bEnd">Fim</label><input class="field" id="bEnd" type="time" value="'+fromMin(en)+'"></div></div>'+
     '<label class="flabel" for="bTask">Ligar a uma tarefa (opcional)</label><select class="field" id="bTask"><option value="">Nenhuma</option>'+tasks.map(function(t){return '<option value="'+t.id+'">'+esc(t.text)+'</option>'}).join('')+'</select>'+
     '<div class="stack"><button class="btn block" data-act="block-save">Salvar</button><button class="btn quiet block" data-act="sheet-close">Cancelar</button></div>');
 }
@@ -109,36 +111,198 @@ export function routineSheet(id){
     '<div class="stack"><button class="btn block" data-act="r-save">Salvar</button>'+(r?'<button class="btn quiet block danger" data-act="r-del" data-id="'+r.id+'">Excluir rotina</button>':'')+'<button class="btn quiet block" data-act="sheet-close">Cancelar</button></div>');
 }
 
-/* ---------- AGENDA ---------- */
+/* Barra Viva de Progresso do Dia + Total de Janelas Livres (Structured + Cron) */
+export function dayPulseBarHTML(k,isT,nm,wins){
+  var freeTot=wins.reduce(function(a,w){return a+(w[1]-w[0])},0);
+  var dayPct=isT?Math.max(0,Math.min(100,Math.round(((nm-DAY_START)/(DAY_END-DAY_START))*100))):0;
+  var subTxt=freeTot>0
+    ?'<b>'+fmtDur(freeTot)+'</b> livres '+(isT?'ainda hoje':'neste dia')+' ('+pl(wins.length,'janela','janelas')+')'
+    :'Dia preenchido · toque em + para ajustar blocos';
+  return '<div class="agenda-day-pulse">'+
+    '<div class="adp-top">'+
+      '<span class="adp-free">'+subTxt+'</span>'+
+      '<button class="cub-btn" data-act="auto-plan-k">Montar dia</button>'+
+    '</div>'+
+    (isT
+      ?'<div class="adp-track-row">'+
+          '<span>08h</span>'+
+          '<div class="adp-track"><span class="adp-fill" style="width:'+dayPct+'%"></span><i class="adp-dot" style="left:'+dayPct+'%"></i></div>'+
+          '<span>21h</span>'+
+        '</div>'
+      :'')+
+  '</div>';
+}
+
+function freeGapRowHTML(k,startM,endM,isNowGap){
+  var dur=endM-startM;
+  var sugDur=Math.min(60,Math.max(15,Math.floor(dur/5)*5));
+  var sStr=fromMin(startM),eStr=fromMin(endM);
+  var endBlockStr=fromMin(Math.min(endM,startM+Math.min(60,dur)));
+  return '<li class="structured-free-gap'+(isNowGap?' is-now-gap':'')+'">'+
+    '<div class="sfg-info">'+
+      '<span class="sfg-pill">'+(isNowGap?'Livre agora':'Janela livre')+'</span>'+
+      '<b>'+fmtDur(dur)+'</b>'+
+      '<span class="sfg-span">'+sStr+' &ndash; '+eStr+'</span>'+
+    '</div>'+
+    '<div class="sfg-acts">'+
+      (isNowGap?'<button class="sfg-btn primary" data-act="gap-focus" data-dur="'+sugDur+'">'+IC_PLAY+' '+sugDur+'m</button>':'')+
+      '<button class="sfg-btn" data-act="block-new" data-start="'+sStr+'" data-end="'+endBlockStr+'">+ Bloco</button>'+
+    '</div>'+
+  '</li>';
+}
+
+/* ---------- AGENDA v3 (Timepage Split Rail + Structured Clickable Free Gaps + Amie Timeblocks + TickTick Routines) ---------- */
 export function renderAgenda(){
   var el=$('#tab-agenda');
-  var head='<h1>Agenda</h1>'+seg('ag-view',UI.agView,[['dia','Dia'],['rotinas','Rotinas'],['gcal','Google Agenda']]);
-  if(UI.agView==='gcal'){
-    el.innerHTML=head+gcalPanelHTML();
-    return;
-  }
-  if(UI.agView==='rotinas'){
-    var list=S.routines.length?'<ul style="margin-top:22px">'+S.routines.map(function(r){
-      return '<li class="rl"><div><b>'+esc(r.name)+'</b><p class="muted small">'+r.time+', '+(r.dur||30)+' min, '+daysText(r.days)+'</p><p class="muted small">'+pl(r.steps.length,'passo','passos')+'</p></div><button class="ghost" data-act="r-edit" data-id="'+r.id+'">Editar</button></li>';
-    }).join('')+'</ul>':'<p class="lead" style="margin-top:22px">Rotinas são o que você repete: manhã, noite, estudo. Crie uma e ela aparece na agenda nos dias certos, com passos para marcar.</p>';
-    el.innerHTML=head+list+'<div class="stack"><button class="btn block" data-act="r-new">Nova rotina</button></div>';
-    return;
-  }
+  if(UI.agView==='energia')UI.agView='dia';
   var k=UI.agDay||today(),isT=k===today(),nm=nowMin();
-  var items=dayItems(k);
-  var rows=items.map(function(i){
-    var isNow=isT&&!i.allDay&&toMin(i.start)<=nm&&nm<toMin(i.end);
-    var time=i.allDay?'<div class="tt">Dia<br><span class="muted">todo</span></div>':'<div class="tt">'+i.start+'<br><span class="muted">'+i.end+'</span></div>';
-    if(i.kind==='rotina')return '<li class="tl'+(isNow?' now':'')+'">'+time+'<div>'+routineRow(i.r,k)+'</div></li>';
-    var tk=i.taskId?findTask(i.taskId):null;
-    return '<li class="tl'+(isNow?' now':'')+'">'+time+'<div><b>'+esc(i.title)+'</b>'+(i.source==='gcal'?'<span class="tag">Google</span>':'')+(tk&&tk.done?' <span class="muted small">(feita)</span>':'')+
-      '<div class="acts">'+(i.allDay?'':'<button class="ghost" data-act="focus-block" data-k="'+k+'" data-id="'+i.id+'">Focar</button>')+(i.source==='gcal'?'':'<button class="x" data-act="block-del" data-k="'+k+'" data-id="'+i.id+'" aria-label="Remover '+esc(i.title)+'">&times;</button>')+'</div></div></li>';
-  }).join('');
-  var label=(isT?'Hoje, ':'')+fmtLong(k);
-  var body=items.length?'<ul class="tlist" style="margin-top:18px;border-top:1px solid var(--line)">'+rows+'</ul>':'<p class="lead" style="margin-top:16px">Nada marcado para este dia. Toque em &ldquo;Montar meu dia&rdquo; para encaixar tarefas nos horários livres.</p>';
-  el.innerHTML=head+
-    '<div class="daynav"><button class="navb" data-act="day-prev" aria-label="Dia anterior">&lsaquo;</button><div class="daylabel">'+esc(cap(label))+'</div><button class="navb" data-act="day-next" aria-label="Próximo dia">&rsaquo;</button></div>'+
-    (isT?'':'<p style="text-align:center;margin-top:6px"><button class="ghost" data-act="day-today">Voltar para hoje</button></p>')+
-    body+gcalHint(k)+
-    '<div class="stack"><button class="btn block" data-act="auto-plan-k">Montar meu dia</button><button class="btn quiet block" data-act="block-new">Novo bloco</button></div>';
+  var mon=mondayOf(k),rail='';
+  for(var ri=0;ri<7;ri++){
+    var rd=addDays(mon,ri),rdt=parseKey(rd),rwd=DAYN[rdt.getDay()].slice(0,3).toUpperCase(),rnum=rdt.getDate();
+    var rSel=(rd===k),rToday=(rd===today());
+    rail+='<button class="tp-rail-day'+(rSel?' active':'')+(rToday?' today':'')+'" data-act="day-pick" data-k="'+rd+'">'+
+      '<span class="trd-wd">'+rwd+'</span>'+
+      '<b class="trd-num">'+rnum+'</b>'+
+      (rToday?'<span class="trd-dot"></span>':'')+
+    '</button>';
+  }
+
+  var viewTabs='<div class="ticktick-seg-bar agenda-seg" role="group">'+
+    '<button class="tt-seg-btn'+(UI.agView==='dia'?' active':'')+'" data-act="ag-view" data-v="dia">Dia</button>'+
+    '<button class="tt-seg-btn'+(UI.agView==='rotinas'?' active':'')+'" data-act="ag-view" data-v="rotinas">Rotinas <span class="tt-badge">'+S.routines.length+'</span></button>'+
+    '<button class="tt-seg-btn'+(UI.agView==='gcal'?' active':'')+'" data-act="ag-view" data-v="gcal">Google</button>'+
+  '</div>';
+
+  var rightContent='';
+  if(UI.agView==='gcal'){
+    rightContent='<div class="tp-stream-head"><div><h2 class="tp-day-title">Google Agenda</h2></div></div>'+
+      viewTabs+gcalPanelHTML();
+  } else if(UI.agView==='rotinas'){
+    /* Agrupamento por período do dia estilo TickTick_iOS_333.png (Morning / Afternoon / Night) */
+    var periods=[
+      {id:'morning',title:'Manhã',sub:'Antes das 12h',color:'#F5B841',items:[]},
+      {id:'afternoon',title:'Tarde',sub:'12h às 18h',color:'#34C759',items:[]},
+      {id:'night',title:'Noite',sub:'Após as 18h',color:'#8E7DFF',items:[]}
+    ];
+    S.routines.forEach(function(r){
+      var tm=toMin(r.time||'07:00');
+      if(tm<12*60)periods[0].items.push(r);
+      else if(tm<18*60)periods[1].items.push(r);
+      else periods[2].items.push(r);
+    });
+    var groupsHTML=S.routines.length?periods.map(function(p){
+      if(!p.items.length)return '';
+      var rows=p.items.map(function(r){
+        return '<div class="ticktick-routine-item">'+
+          '<div class="tri-top-meta">'+
+            '<span class="tri-meta">'+r.time+' &middot; '+(r.dur||30)+'m &middot; '+daysText(r.days)+'</span>'+
+            '<button class="task-act-btn" data-act="r-edit" data-id="'+r.id+'">Editar</button>'+
+          '</div>'+
+          '<div class="tri-checklist">'+routineRow(r,k)+'</div>'+
+        '</div>';
+      }).join('');
+      return '<section class="ticktick-group-card">'+
+        '<div class="tgc-head"><b>'+p.title+'</b><span>'+p.sub+'</span></div>'+
+        rows+
+      '</section>';
+    }).join(''):'<div class="tp-empty-state" style="margin-top:16px"><b>Nenhuma rotina cadastrada</b><p class="muted small">Crie rituais de Manhã, Tarde ou Noite com checklists expansíveis estilo Tiimo e TickTick.</p></div>';
+
+    rightContent='<div class="tp-stream-head">'+
+      '<div><span class="v2-sec-eyebrow">HÁBITOS &amp; RITUAIS</span><h2 class="tp-day-title">Rotinas Diárias</h2></div>'+
+      '<button class="things-magic-plus sm" data-act="r-new" aria-label="Nova rotina">+</button>'+
+    '</div>'+
+    viewTabs+
+    groupsHTML+
+    '<div class="tp-actions-row" style="margin-top:14px"><button class="btn block" data-act="r-new">+ Criar Nova Rotina</button></div>';
+  } else {
+    var items=dayItems(k);
+    var fromWin=isT?Math.max(DAY_START,ceil5(nm)):DAY_START;
+    var wins=freeWindows(k,fromWin);
+    var nowPlaced=false;
+    var nowLineHTML='<li class="amie-now-horizon" aria-label="Horário atual"><span class="anh-time">'+fromMin(nm)+'</span><span class="anh-dot"></span><span class="anh-line"></span></li>';
+    var rows=[];
+    var prevEnd=fromWin;
+
+    items.forEach(function(i){
+      var sMin=i.allDay?0:toMin(i.start),eMin=i.allDay?1440:toMin(i.end);
+      var durMins=Math.max(15,eMin-sMin);
+      if(isT&&!nowPlaced&&!i.allDay&&sMin>nm){
+        rows.push(nowLineHTML);
+        nowPlaced=true;
+      }
+      /* Injeta janela livre clicável antes do evento (estilo Structured) */
+      if(!i.allDay&&sMin>=prevEnd+20&&prevEnd<DAY_END){
+        var gStart=Math.max(prevEnd,DAY_START),gEnd=Math.min(sMin,DAY_END);
+        if(gEnd-gStart>=20){
+          rows.push(freeGapRowHTML(k,gStart,gEnd,isT&&gStart<=nm+5&&gEnd>nm));
+        }
+      }
+      if(!i.allDay)prevEnd=Math.max(prevEnd,eMin);
+
+      var isNow=isT&&!i.allDay&&sMin<=nm&&nm<eMin;
+      var blockTheme=i.kind==='rotina'?'amie-plum':(i.source==='gcal'?'amie-cobalt':'amie-sage');
+      var spanTxt=i.allDay?'DIA TODO':(i.start+' &ndash; '+i.end);
+      var durBadge=i.allDay?'Dia todo':fmtDur(durMins);
+      var nowBadge=isNow?' <span class="tp-now-pill">AGORA</span>':'';
+
+      var propH=i.allDay?58:Math.max(60,Math.min(144,Math.round(durMins*1.2)));
+      if(i.kind==='rotina'){
+        rows.push('<li class="amie-timeblock '+blockTheme+(isNow?' is-now':'')+'" style="min-height:'+propH+'px">'+
+          '<span class="atb-rail"></span>'+
+          '<div class="atb-body">'+
+            '<div class="atb-top"><span class="atb-time">'+spanTxt+nowBadge+'</span><span class="atb-dur">'+durBadge+'</span></div>'+
+            routineRow(i.r,k)+
+          '</div>'+
+        '</li>');
+      } else {
+        var tk=i.taskId?findTask(i.taskId):null;
+        rows.push('<li class="amie-timeblock '+blockTheme+(isNow?' is-now':'')+'" style="min-height:'+propH+'px">'+
+          '<span class="atb-rail"></span>'+
+          '<div class="atb-body">'+
+            '<div class="atb-top"><span class="atb-time">'+spanTxt+nowBadge+'</span><span class="atb-dur">'+durBadge+'</span></div>'+
+            '<div class="atb-main-row">'+
+              '<div class="atb-titles">'+
+                '<b class="atb-title">'+esc(i.title)+'</b>'+
+                '<span class="atb-sub">'+(i.source==='gcal'?'Google Agenda':'Bloco de Foco')+(tk&&tk.done?' · Concluída':'')+'</span>'+
+              '</div>'+
+              '<div class="tp-acts">'+
+                (i.allDay?'':'<button class="tiimo-start-pill sm" data-act="focus-block" data-k="'+k+'" data-id="'+i.id+'">'+IC_PLAY+' <span>Focar</span></button>')+
+                (i.source==='gcal'?'':'<button class="lpc-remove" data-act="block-del" data-k="'+k+'" data-id="'+i.id+'" aria-label="Remover '+esc(i.title)+'">&times;</button>')+
+              '</div>'+
+            '</div>'+
+          '</div>'+
+        '</li>');
+      }
+      if(isT&&isNow&&!nowPlaced){
+        rows.push(nowLineHTML);
+        nowPlaced=true;
+      }
+    });
+    if(isT&&!nowPlaced)rows.push(nowLineHTML);
+    if(DAY_END-prevEnd>=20){
+      rows.push(freeGapRowHTML(k,prevEnd,DAY_END,isT&&prevEnd<=nm+5&&DAY_END>nm));
+    }
+
+    var label=(isT?'Hoje · ':'')+fmtLong(k);
+    var body='<ul class="tlist amie-timeline-list">'+rows.join('')+'</ul>';
+
+    rightContent='<div class="tp-stream-head">'+
+      '<div><span class="v2-sec-eyebrow">LINHA DO DIA · '+parseKey(k).getFullYear()+'</span><h2 class="tp-day-title">'+esc(cap(label))+'</h2></div>'+
+      '<div class="tci-actions">'+(isT?'':'<button class="tci-btn" data-act="day-today">Hoje</button>')+'<button class="things-magic-plus sm" data-act="block-new" aria-label="Novo bloco">+</button></div>'+
+    '</div>'+
+    viewTabs+
+    dayPulseBarHTML(k,isT,nm,wins)+
+    body+
+    gcalHint(k)+
+    '<div class="tp-actions-row"><button class="btn small" data-act="auto-plan-k">Montar meu dia</button><button class="btn quiet small" data-act="block-new">+ Novo bloco</button></div>';
+  }
+
+  el.innerHTML='<div class="timepage-edge-split">'+
+    '<aside class="tp-dark-rail" aria-label="Dias da semana">'+
+      '<button class="tp-rail-step" data-act="day-prev" aria-label="Semana anterior">&lsaquo;</button>'+
+      rail+
+      '<button class="tp-rail-step" data-act="day-next" aria-label="Próxima semana">&rsaquo;</button>'+
+    '</aside>'+
+    '<div class="tp-stream-col">'+rightContent+'</div>'+
+  '</div>';
 }
